@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const total = releases.reduce((sum, rel) => sum + (rel.assets || [])
           .reduce((n, asset) => n + (asset.download_count || 0), 0), 0);
 
-        if (!total) return;
+        if (typeof total !== 'number' || isNaN(total)) return;
 
         count.textContent = total.toLocaleString();
         sessionStorage.setItem('system_repo_downloads', String(total));
