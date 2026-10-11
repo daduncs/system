@@ -54,6 +54,12 @@ public final class ClickGui extends Screen {
 
 	private static final float SCALE = 0.78f;
 
+	private static final Anim zoom = new Anim(1f, 12f);
+
+	private static float scale() {
+		return SCALE * zoom.get();
+	}
+
 	private static final int RAIL_W = 46;
 	private static final int RAIL_WIDE = 132;
 	private static final int RAIL_H = 403;
@@ -173,6 +179,7 @@ public final class ClickGui extends Screen {
 	@Override
 	public void onDisplayed() {
 		wide = ClickGUI.ui.isMode(ClickGUI.Ui.SystemDuo);
+		zoom.snap(ClickGUI.guiSize.getValueFloat() / 100f);
 	}
 
 	private boolean duo() {
@@ -242,7 +249,7 @@ public final class ClickGui extends Screen {
 	}
 
 	public static float panelTop(int screenHeight) {
-		return screenHeight / 2f - PANEL_H / 2f * SCALE;
+		return screenHeight / 2f - PANEL_H / 2f * scale();
 	}
 
 	private List<Card> visible() {
@@ -303,20 +310,23 @@ public final class ClickGui extends Screen {
 	}
 
 	private float mapX(double value) {
-		return (float) ((value - width / 2f) / SCALE + width / 2f);
+		return (float) ((value - width / 2f) / scale() + width / 2f);
 	}
 
 	private float mapY(double value) {
-		return (float) ((value - height / 2f) / SCALE + height / 2f);
+		return (float) ((value - height / 2f) / scale() + height / 2f);
 	}
 
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+		zoom.to(ClickGUI.guiSize.getValueFloat() / 100f);
+		zoom.update(delta);
+
 		Matrix3x2fStack matrices = context.getMatrices();
 
 		matrices.pushMatrix();
 		matrices.translate(width / 2f, height / 2f);
-		matrices.scale(SCALE, SCALE);
+		matrices.scale(scale(), scale());
 		matrices.translate(-width / 2f, -height / 2f);
 
 		draw(context, (int) mapX(mouseX), (int) mapY(mouseY), delta);
@@ -630,7 +640,7 @@ public final class ClickGui extends Screen {
 		int barWidth = (int) (213 * (closing ? 1f : eased));
 		int barX = x + w / 2 - barWidth / 2;
 		int barY = closing
-				? (int) (y + PANEL_H + 6 + (1f - eased) * (height / 2f + height / (2f * SCALE) - y - PANEL_H))
+				? (int) (y + PANEL_H + 6 + (1f - eased) * (height / 2f + height / (2f * scale()) - y - PANEL_H))
 				: (int) (y + PANEL_H + 6 + 26 * (1f - eased));
 
 		Render2D.drawGlassRoundRect(context, barX, barY, barWidth, 32, Theme.SEARCH_ROUND, Theme.SHEEN, Theme.BLUR * haze, Theme.surface, alpha * open);

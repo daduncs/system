@@ -29,6 +29,7 @@ import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.mode;
+import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.Sounds;
 import net.minecraft.client.gui.screen.Screen;
@@ -55,6 +56,8 @@ public final class ClickGUI extends Module {
 	public static final int VARIANCE = 10;
 
 	public static final mode<Ui> ui = new mode<>(EncryptedString.of("Ui"), Ui.System, Ui.class);
+
+	public static final number guiSize = new number(EncryptedString.of("Gui Size"), 50, 150, 100, 5);
 
 	public static final bool openCloseSounds = new bool(EncryptedString.of("Open Close Sounds"), true);
 
@@ -126,7 +129,7 @@ public final class ClickGUI extends Module {
 				GLFW.GLFW_KEY_RIGHT_SHIFT,
 				Category.CLIENT);
 
-		addSettings(ui, openCloseSounds, uiSounds, theme, yours, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
+		addSettings(ui, guiSize, openCloseSounds, uiSounds, theme, yours, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
 	}
 
 	@Override
