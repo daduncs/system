@@ -41,7 +41,7 @@ public final class UpdateManager {
 	public static final String RELEASE_ON_GITHUB =
 			"https://api.github.com/repos/daduncs/system/releases/latest";
 
-	public static final String DISCORD_INVITE = "https://discord.gg/DQ9QmSBnsV";
+	public static final String DISCORD_INVITE = "https://discord.gg/kP8Mj4BPXv";
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
