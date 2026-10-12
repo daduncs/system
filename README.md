@@ -4,7 +4,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/daduncs/system?style=flat-square&color=8a2be2)](https://github.com/daduncs/system/issues)
 [![License](https://img.shields.io/badge/license-GPL--3.0-8a2be2?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
-<a href="https://discord.gg/yynpznJVkC"><img src="https://invidget.switchblade.xyz/yynpznJVkC" alt="Discord Invite"/></a>
+<a href="https://discord.gg/kP8Mj4BPXv"><img src="https://invidget.switchblade.xyz/kP8Mj4BPXv" alt="Discord Invite"/></a>
 
 > **🌐 Full website here** [download.daduncs.cloud](https://download.daduncs.cloud)
 
