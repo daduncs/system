@@ -58,7 +58,7 @@ public abstract class Setting<T extends Setting<T>> {
 	}
 
 	public boolean shouldShowDescription() {
-		return showDescription || (tag != null && tag.toString().contains("DESC"));
+		return showDescription || (tag != null && tag.toString().toUpperCase().contains("DESC"));
 	}
 
 	public T setShowDescription(boolean showDescription) {
