@@ -24,7 +24,6 @@ import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.module.modules.misc.NoBreakDelay;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import org.objectweb.asm.Opcodes;
@@ -64,12 +63,6 @@ public class ClientPlayerInteractionManagerMixin {
 			return;
 		}
 
-		ItemStack stack = player.getStackInHand(hand);
-		if (isNonUsableItem(stack)) {
-			cir.setReturnValue(ActionResult.PASS);
-			return;
-		}
-
 		if (this.sr$use) {
 			return;
 		}
@@ -103,24 +96,5 @@ public class ClientPlayerInteractionManagerMixin {
 		player.lastYaw = this.sr$ly;
 		player.lastPitch = this.sr$lp;
 		this.sr$use = false;
-	}
-
-	@Unique
-	private static boolean isNonUsableItem(ItemStack stack) {
-		if (stack == null || stack.isEmpty()) {
-			return false;
-		}
-		if (stack.contains(net.minecraft.component.DataComponentTypes.CONSUMABLE) ||
-				stack.contains(net.minecraft.component.DataComponentTypes.EQUIPPABLE) ||
-				stack.contains(net.minecraft.component.DataComponentTypes.BLOCKS_ATTACKS) ||
-				stack.contains(net.minecraft.component.DataComponentTypes.KINETIC_WEAPON)) {
-			return false;
-		}
-		return stack.isIn(net.minecraft.registry.tag.ItemTags.SWORDS) ||
-				stack.isOf(net.minecraft.item.Items.MACE) ||
-				stack.isIn(net.minecraft.registry.tag.ItemTags.AXES) ||
-				stack.isIn(net.minecraft.registry.tag.ItemTags.PICKAXES) ||
-				stack.isIn(net.minecraft.registry.tag.ItemTags.SHOVELS) ||
-				stack.isIn(net.minecraft.registry.tag.ItemTags.HOES);
 	}
 }

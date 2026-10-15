@@ -50,6 +50,7 @@ import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -70,8 +71,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 	private final bool breachSwap = new bool(EncryptedString.of("Breach Swap"), true);
 	private final bool aim = new bool(EncryptedString.of("Aim"), true);
 	private final number aimSpeed = new number(EncryptedString.of("Aim Speed"), 50, 2000, 1000, 10);
-	private final bool silent = new bool(EncryptedString.of("Silent Rotations"), false)
-			.setDescription(EncryptedString.of("Aims server side only, your camera doesn't move"));
+	private final bool silent = new bool(EncryptedString.of("Silent Rotations"), false);
 	private final range silentSpeed = new range(EncryptedString.of("Silent Speed"), 0, 600, 1, 100, 150);
 	private final bool spam = new bool(EncryptedString.of("Spam"), true);
 
@@ -191,7 +191,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 			return;
 		}
 
-		if (target.hurtTime > 1 && !aboutToLand()) return;
+		if (target.hurtTime > 1 && !aboutToLand() && !passing()) return;
 
 		prevSlot = currentSlot;
 		if (selectSlot(mace)) {
@@ -248,8 +248,8 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		SilentAim.stop(this);
 		if (!aim.getValue()) return;
 		if (target == null || target.isRemoved() || !target.isAlive() || mc.currentScreen != null) return;
-		if (!falling() || maceSlot() == -1) return;
-		if (mc.player.squaredDistanceTo(target) > 16) return;
+		if (!airborne() || maceSlot() == -1) return;
+		if (!inRange()) return;
 
 		if (held(holding ? 0f : -0.15f)) {
 			holding = true;
@@ -274,7 +274,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 
 	private void silentAim() {
 		boolean valid = aim.getValue() && target != null && !target.isRemoved() && target.isAlive() && mc.currentScreen == null
-				&& falling() && maceSlot() != -1 && mc.player.squaredDistanceTo(target) <= 16;
+				&& airborne() && maceSlot() != -1 && inRange();
 
 		if (valid && SilentAim.rotateTo(this, target, silentSpeed.getRandomValueFloat(), silentSpeed.getRandomValueFloat(), 50f))
 			return;
@@ -350,19 +350,34 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 
 	private PlayerEntity findTarget() {
 		if (mc.world == null || mc.player == null) return null;
-		PlayerEntity below = null;
+
+		PlayerEntity best = null;
+		double bestDistance = Double.MAX_VALUE;
+		double scan = 2.5 + lead();
 
 		for (PlayerEntity player : mc.world.getPlayers()) {
 			if (player == mc.player || !player.isAlive()) continue;
-			if (mc.player.getY() < player.getY() + player.getHeight() - 0.5) continue;
-			if (Math.hypot(player.getX() - mc.player.getX(), player.getZ() - mc.player.getZ()) > 2.5) continue;
+			if (System.INSTANCE.getFriendManager().isFriend(player)) continue;
 
-			below = player;
+			double dx = player.getX() - mc.player.getX();
+			double dz = player.getZ() - mc.player.getZ();
+			double horizontalDistance = Math.hypot(dx, dz);
+
+			if (horizontalDistance > scan) continue;
+			if (mc.player.getY() < player.getY() + player.getHeight() - 0.5) continue;
+
+			if (horizontalDistance < bestDistance) {
+				bestDistance = horizontalDistance;
+				best = player;
+			}
 		}
 
-		if (below != null) return below;
+		if (best != null) return best;
 
-		if (mc.crosshairTarget instanceof EntityHitResult hit && hit.getEntity() instanceof PlayerEntity player && player.isAlive()) {
+		if (mc.crosshairTarget instanceof EntityHitResult hit
+				&& hit.getEntity() instanceof PlayerEntity player
+				&& player.isAlive()
+				&& !System.INSTANCE.getFriendManager().isFriend(player)) {
 			return player;
 		}
 
@@ -413,10 +428,28 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		}
 		Vec3d vel = mc.player.getVelocity();
 		double horizSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
-		if (horizSpeed > 0.05) {
+		if (horizSpeed > 0.05 && !closingIn(vel)) {
 			safeReach -= Math.min(0.20, horizSpeed * 0.6);
 		}
 		return safeReach;
+	}
+
+	private boolean closingIn(Vec3d vel) {
+		if (target == null) return false;
+
+		return vel.x * (target.getX() - mc.player.getX()) + vel.z * (target.getZ() - mc.player.getZ()) > 0;
+	}
+
+	private double lead() {
+		Vec3d vel = mc.player.getVelocity();
+
+		return Math.hypot(vel.x, vel.z) * 3;
+	}
+
+	private boolean inRange() {
+		double range = 4 + lead();
+
+		return mc.player.squaredDistanceTo(target) <= range * range;
 	}
 
 	private boolean canReach() {
@@ -468,17 +501,34 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		return !mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().offset(0, mc.player.getVelocity().y * 2.0, 0));
 	}
 
+	private boolean passing() {
+		Vec3d vel = mc.player.getVelocity();
+		Vec3d next = mc.player.getEyePos().add(vel);
+		Box box = target.getBoundingBox();
+
+		double x = MathHelper.clamp(next.x, box.minX, box.maxX);
+		double y = MathHelper.clamp(next.y, box.minY, box.maxY);
+		double z = MathHelper.clamp(next.z, box.minZ, box.maxZ);
+
+		if (next.distanceTo(new Vec3d(x, y, z)) > getSafeReach()) return true;
+
+		return target.isOnGround() && mc.player.getY() + vel.y < box.maxY - 0.5;
+	}
+
 	private boolean falling() {
+		return airborne() && mc.player.fallDistance > 1.5;
+	}
+
+	private boolean airborne() {
 		if (mc.player == null) return false;
 		if (mc.player.isOnGround()) return false;
-		if (mc.player.isGliding() || mc.player.isTouchingWater()) return false;
 
-		return mc.player.fallDistance > 1.5;
+		return !mc.player.isGliding() && !mc.player.isTouchingWater();
 	}
 
 	private float towards(float from, float to, float seconds, float rate, float cap) {
 		float diff = MathHelper.wrapDegrees(to - from);
-		float factor = 1f - (float) Math.exp(-aimSpeed.getValueFloat() * rate * seconds * 0.03f);
+		float factor = 1f - (float) Math.exp(-aimSpeed.getValueFloat() * rate * seconds * 0.03f * (1f + (float) lead()));
 		float step = diff * factor;
 		float maxStep = cap * Math.max(1.0f, seconds * 20.0f);
 		step = MathHelper.clamp(step, -maxStep, maxStep);
