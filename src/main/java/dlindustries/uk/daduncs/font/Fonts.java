@@ -39,6 +39,7 @@ public final class Fonts {
 	public static GlyphPageFontRenderer PRODUCT_SANS_MEDIUM_18 = GlyphPageFontRenderer.createStyled("/assets/system/font/product_sans_medium.ttf", 18, Font.PLAIN);
 	public static GlyphPageFontRenderer PRODUCT_SANS_REGULAR_32 = GlyphPageFontRenderer.createStyled("/assets/system/font/product_sans_regular.ttf", 32, Font.PLAIN);
 	public static GlyphPageFontRenderer PRODUCT_SANS_REGULAR_16 = GlyphPageFontRenderer.createStyled("/assets/system/font/product_sans_regular.ttf", 16, Font.PLAIN);
+	public static GlyphPageFontRenderer SUPERHERO = GlyphPageFontRenderer.createStyled("/assets/system/font/superherotufffont.ttf", 80, Font.PLAIN);
 
 	public static void preload() {
 	}

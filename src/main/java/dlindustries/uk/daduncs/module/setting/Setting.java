@@ -20,6 +20,8 @@
 
 package dlindustries.uk.daduncs.module.setting;
 
+import java.util.function.BooleanSupplier;
+
 public abstract class Setting<T extends Setting<T>> {
 	private CharSequence name;
 	public CharSequence description;
@@ -63,6 +65,17 @@ public abstract class Setting<T extends Setting<T>> {
 
 	public T setShowDescription(boolean showDescription) {
 		this.showDescription = showDescription;
+		return (T) this;
+	}
+
+	private BooleanSupplier visibility = () -> true;
+
+	public boolean isVisible() {
+		return visibility.getAsBoolean();
+	}
+
+	public T setVisibility(BooleanSupplier visibility) {
+		this.visibility = visibility;
 		return (T) this;
 	}
 }

@@ -179,7 +179,7 @@ public final class ModuleHud extends Module implements HudListener {
 			matrices.popMatrix();
 
 		matrices.pushMatrix();
-		matrices.translate(0f, -0.5f);
+		matrices.translate(0f, -1.5f);
 
 		for (int i = 0; i < visible.size(); i++) {
 			float[] slot = shape.get(i);

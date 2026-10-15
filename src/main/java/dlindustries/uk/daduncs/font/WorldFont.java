@@ -41,6 +41,7 @@ public final class WorldFont {
 
 	private static final float PAD = 8f;
 	private static final Map<Identifier, RenderLayer> layers = new HashMap<>();
+	private static final Map<Identifier, RenderLayer> comics = new HashMap<>();
 
 	public static float width(GlyphPageFontRenderer font, CharSequence text) {
 		GlyphPage page = font.page();
@@ -110,6 +111,57 @@ public final class WorldFont {
 		});
 	}
 
+	public static void outlined(GlyphPageFontRenderer font, MatrixStack matrices, CharSequence text, int color, float thickness) {
+		GlyphPage page = font.page();
+		Identifier texture = page.texture();
+
+		if (texture == null || text.isEmpty())
+			return;
+
+		Matrix4f matrix = new Matrix4f(matrices.peek().getPositionMatrix());
+		RenderLayer layer = comic(texture);
+
+		RenderUtils.drawLayer(layer, buffer -> letters(buffer, matrix, page, text, color & 0xFF000000, thickness));
+		RenderUtils.drawLayer(layer, buffer -> letters(buffer, matrix, page, text, color, 0f));
+	}
+
+	private static void letters(VertexConsumer buffer, Matrix4f matrix, GlyphPage page, CharSequence text, int color, float grow) {
+		float atlas = page.atlas();
+		float cursor = 0f;
+
+		for (int i = 0; i < text.length(); i++) {
+			GlyphPage.Glyph glyph = page.glyph(text.charAt(i));
+
+			if (glyph == null)
+				continue;
+
+			float w = glyph.getWidth();
+			float h = glyph.getHeight();
+
+			float u0 = (glyph.getX() - grow) / atlas;
+			float v0 = (glyph.getY() - grow) / atlas;
+			float u1 = (glyph.getX() + w + grow) / atlas;
+			float v1 = (glyph.getY() + h + grow) / atlas;
+
+			edge(buffer, matrix, cursor - grow, h + grow, u0, v0, color, glyph, grow);
+			edge(buffer, matrix, cursor - grow, -grow, u0, v1, color, glyph, grow);
+			edge(buffer, matrix, cursor + w + grow, -grow, u1, v1, color, glyph, grow);
+			edge(buffer, matrix, cursor + w + grow, h + grow, u1, v0, color, glyph, grow);
+
+			cursor += w - PAD;
+		}
+	}
+
+	private static void edge(VertexConsumer buffer, Matrix4f matrix, float px, float py, float u, float v,
+							 int color, GlyphPage.Glyph glyph, float grow) {
+		buffer.vertex(matrix, px, py, 0f)
+				.color(color)
+				.texture(u, v)
+				.overlay(glyph.getX(), glyph.getY())
+				.light(0, 0)
+				.normal(glyph.getWidth() / 127f, glyph.getHeight() / 127f, grow / 127f);
+	}
+
 	private static int shade(int hot, int cold, float slice, float phase) {
 		return Theme.lerp(hot, cold, (float) (0.5 + 0.5 * Math.sin((slice * 0.8f + phase) * Math.PI * 2.0)));
 	}
@@ -148,6 +200,16 @@ public final class WorldFont {
 		PipelineInitializer.init();
 		return layers.computeIfAbsent(texture, id -> RenderLayerAccessor.invokeOf("system_world_text",
 				RenderSetup.builder(PipelineRegistry.LYRICS_PIPELINE)
+						.texture("Sampler0", id)
+						.translucent()
+						.expectedBufferSize(4096)
+						.build()));
+	}
+
+	private static RenderLayer comic(Identifier texture) {
+		PipelineInitializer.init();
+		return comics.computeIfAbsent(texture, id -> RenderLayerAccessor.invokeOf("system_world_comic",
+				RenderSetup.builder(PipelineRegistry.COMIC_PIPELINE)
 						.texture("Sampler0", id)
 						.translucent()
 						.expectedBufferSize(4096)

@@ -20,10 +20,10 @@
 
 package dlindustries.uk.daduncs.module.modules.render;
 
-import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
+import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.render.SkyPainter;
 import dlindustries.uk.daduncs.utils.EncryptedString;
@@ -36,15 +36,17 @@ public final class CustomSky extends Module {
 				EncryptedString.of("Swaps the vanilla sky for one of our own"),
 				-1,
 				Category.RENDER);
-		addSettings(color, speed, clouds, stars, waves, fog, fogStart, fogEnd);
+		addSettings(skyColor, color, speed, clouds, stars, waves, fog, fogColor, fogStart, fogEnd);
 	}
 
+	private final colour skyColor = new colour(EncryptedString.of("Sky Color"), 0xFF9B6DFF);
 	private final number color = new number(EncryptedString.of("Color"), 0, 100, 55, 1);
 	private final number speed = new number(EncryptedString.of("Speed"), 0, 5, 3.4, 0.1);
 	private final number clouds = new number(EncryptedString.of("Clouds"), 0, 100, 100, 1);
 	private final number stars = new number(EncryptedString.of("Stars"), 0, 100, 100, 1);
 	private final number waves = new number(EncryptedString.of("Waves"), 0, 100, 100, 1);
 	private final bool fog = new bool(EncryptedString.of("Fog"), false);
+	private final colour fogColor = new colour(EncryptedString.of("Fog Color"), 0xFF9B6DFF).setVisibility(fog::getValue);
 	private final number fogStart = new number(EncryptedString.of("Fog Start"), 0, 200, 17, 1);
 	private final number fogEnd = new number(EncryptedString.of("Fog End"), 4, 512, 162, 2);
 
@@ -54,7 +56,7 @@ public final class CustomSky extends Module {
 		float clock = (java.lang.System.currentTimeMillis() % 600000L) / 1000f;
 		float day = (mc.world.getTimeOfDay() % 24000L) / 24000f;
 
-		SkyPainter.render(Theme.accent, clock * speed.getValueFloat(), day,
+		SkyPainter.render(skyColor.getValue(), clock * speed.getValueFloat(), day,
 				color.getValueFloat() / 100f, night(day),
 				waves.getValueFloat() / 100f, stars.getValueFloat() / 100f, clouds.getValueFloat() / 100f);
 	}
@@ -72,7 +74,7 @@ public final class CustomSky extends Module {
 	}
 
 	public Vector4f fogColour(float alpha) {
-		int accent = Theme.accent;
+		int accent = fogColor.getValue();
 
 		return new Vector4f(((accent >> 16) & 0xFF) / 255f,
 				((accent >> 8) & 0xFF) / 255f,

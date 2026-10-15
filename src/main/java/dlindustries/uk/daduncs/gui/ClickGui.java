@@ -951,6 +951,7 @@ public final class ClickGui extends Screen {
 
 	public void onGuiClose() {
 		if (!shutting) {
+			Picker.close();
 			shutting = true;
 			closing = 0f;
 			ClickGUI.uiSound(Sounds.CLOSE_QUICK);

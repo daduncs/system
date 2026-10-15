@@ -20,9 +20,9 @@
 
 package dlindustries.uk.daduncs.module.modules.render;
 
-import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.render.esp.OutlineRenderer;
@@ -34,6 +34,7 @@ public final class HandShaders extends Module {
 		SOLID, FROSTED, FLUID
 	}
 
+	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF);
 	private final mode<Fill> fillMode = new mode<>(EncryptedString.of("Fill Mode"), Fill.SOLID, Fill.class);
 	private final number fill = new number(EncryptedString.of("Fill"), 0, 1, 0.35, 0.05);
 	private final number width = new number(EncryptedString.of("Width"), 1, 6, 3, 0.5);
@@ -46,12 +47,12 @@ public final class HandShaders extends Module {
 				EncryptedString.of("pretty self explanatory"),
 				-1,
 				Category.RENDER);
-		addSettings(fillMode, fill, width, glow);
+		addSettings(color, fillMode, fill, width, glow);
 	}
 
 	public void composite() {
 		renderer.beginFrame();
-		renderer.addDepth(Theme.accent);
+		renderer.addDepth(color.getValue());
 		renderer.composite(width.getValueFloat(), glow.getValueFloat(), fill.getValueFloat(), fillMode.getModeIndex());
 	}
 }

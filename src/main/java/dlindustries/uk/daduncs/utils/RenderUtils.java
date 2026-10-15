@@ -19,12 +19,16 @@
  */
 
 package dlindustries.uk.daduncs.utils;
+import dlindustries.uk.daduncs.mixin.RenderLayerAccessor;
+import dlindustries.uk.daduncs.render.renderers.pipeline.PipelineInitializer;
+import dlindustries.uk.daduncs.render.renderers.pipeline.PipelineRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.BufferAllocator;
@@ -46,6 +50,7 @@ import static dlindustries.uk.daduncs.System.mc;
 
 public final class RenderUtils {
 	public static boolean rendering3D = true;
+	private static RenderLayer lines;
 	private static int projectionDepth;
 
 	public static Vec3d getCameraPos() {
@@ -442,8 +447,7 @@ public final class RenderUtils {
 		float blue = color.getBlue() / 255F;
 		float alpha = color.getAlpha() / 255F;
 
-		GL11.glDepthFunc(GL11.GL_ALWAYS);
-		drawLayer(RenderLayers.lines(), buffer -> {
+		drawLayer(lines(), buffer -> {
 			float minX = (float) box.minX;
 			float minY = (float) box.minY;
 			float minZ = (float) box.minZ;
@@ -466,7 +470,6 @@ public final class RenderUtils {
 			emitLine(buffer, matrix, maxX, minY, maxZ, maxX, maxY, maxZ, red, green, blue, alpha, lineWidth);
 			emitLine(buffer, matrix, minX, minY, maxZ, minX, maxY, maxZ, red, green, blue, alpha, lineWidth);
 		});
-		GL11.glDepthFunc(GL11.GL_LEQUAL);
 	}
 
 	public static void renderLine(MatrixStack matrices, Color color, Vec3d start, Vec3d end) {
@@ -476,14 +479,13 @@ public final class RenderUtils {
 	public static void renderLine(MatrixStack matrices, Color color, Vec3d start, Vec3d end, float lineWidth) {
 		matrices.push();
 		Matrix4f matrix = matrices.peek().getPositionMatrix();
-		GL11.glDepthFunc(GL11.GL_ALWAYS);
 
 		float red = color.getRed() / 255f;
 		float green = color.getGreen() / 255f;
 		float blue = color.getBlue() / 255f;
 		float alpha = color.getAlpha() / 255f;
 
-		drawLayer(RenderLayers.lines(), buffer -> emitLine(
+		drawLayer(lines(), buffer -> emitLine(
 				buffer,
 				matrix,
 				(float) start.x,
@@ -499,8 +501,16 @@ public final class RenderUtils {
 				lineWidth
 		));
 
-		GL11.glDepthFunc(GL11.GL_LEQUAL);
 		matrices.pop();
+	}
+
+	private static RenderLayer lines() {
+		if (lines == null) {
+			PipelineInitializer.init();
+			lines = RenderLayerAccessor.invokeOf("system_lines", RenderSetup.builder(PipelineRegistry.LINES_PIPELINE).build());
+		}
+
+		return lines;
 	}
 
 }

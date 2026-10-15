@@ -25,12 +25,12 @@ import dlindustries.uk.daduncs.event.events.HudListener;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
+import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.ProjectionUtils;
 import dlindustries.uk.daduncs.utils.RenderUtils;
-import dlindustries.uk.daduncs.utils.Utils;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
@@ -48,6 +48,7 @@ public final class PlayerESP extends Module implements GameRenderListener, HudLi
 	}
 
 	public final mode<Mode> mode = new mode<>(EncryptedString.of("Mode"), Mode.ThreeD, Mode.class);
+	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF);
 	private final number alpha = new number(EncryptedString.of("Alpha"), 0, 255, 100, 1);
 	private final number width = new number(EncryptedString.of("Line width"), 1, 10, 1, 1);
 	private final bool tracers = new bool(EncryptedString.of("Tracers"), false)
@@ -66,7 +67,7 @@ public final class PlayerESP extends Module implements GameRenderListener, HudLi
 				EncryptedString.of("Renders players through walls"),
 				-1,
 				Category.RENDER);
-		addSettings(alpha, mode, hideFriends, friendColor, threeDOutline, threeDFill, twoDOutline, twoDFill, width, tracers);
+		addSettings(color, alpha, mode, hideFriends, friendColor, threeDOutline, threeDFill, twoDOutline, twoDFill, width, tracers);
 	}
 
 	@Override
@@ -233,7 +234,7 @@ public final class PlayerESP extends Module implements GameRenderListener, HudLi
 	}
 
 	private Color getColor(int alpha) {
-		return Utils.getMainColor(alpha, 1);
+		return new Color((color.getValue() & 0xFFFFFF) | (alpha << 24), true);
 	}
 
 	private record ScreenBounds(int minX, int minY, int maxX, int maxY) {

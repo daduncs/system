@@ -100,10 +100,12 @@ public final class ModuleManager implements ButtonListener {
 		add(new Watermark());
 		add(new MusicHud());
 		add(new WorldLyrics());
+		add(new HitFx());
 
 		add(new AutoMaceV1());
 		add(new MaceSwap());
 		add(new Grappler());
+		add(new ElytraSwapV2());
 
 		add(new AutoCart());
 		add(new CrossbowCart());

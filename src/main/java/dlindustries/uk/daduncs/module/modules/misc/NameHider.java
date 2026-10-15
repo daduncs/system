@@ -28,9 +28,14 @@ import dlindustries.uk.daduncs.module.setting.string;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.MutableText;
+import net.minecraft.text.OrderedText;
 import net.minecraft.text.PlainTextContent;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableTextContent;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class NameHider extends Module implements TickListener {
 
@@ -71,19 +76,76 @@ public final class NameHider extends Module implements TickListener {
 	}
 
 	public static Text hide(Text message) {
-		NameHider module = System.INSTANCE.getModuleManager().getModule(NameHider.class);
+		NameHider module = active();
 
 		if (message == null || module == null) return message;
-		if (!module.isEnabled()) return message;
-		if (System.mc.player == null) return message;
 
 		String real = System.mc.player.getGameProfile().name();
-		String shown = module.name.getValue();
 
-		if (real == null || shown == null || shown.isEmpty()) return message;
 		if (!message.getString().contains(real)) return message;
 
-		return swap(message, real, shown);
+		return swap(message, real, module.name.getValue());
+	}
+
+	public static String hide(String text) {
+		NameHider module = active();
+
+		if (text == null || module == null) return text;
+
+		return text.replace(System.mc.player.getGameProfile().name(), module.name.getValue());
+	}
+
+	public static OrderedText hide(OrderedText text) {
+		NameHider module = active();
+
+		if (text == null || module == null) return text;
+
+		String real = System.mc.player.getGameProfile().name();
+		StringBuilder plain = new StringBuilder();
+		List<Style> styles = new ArrayList<>();
+
+		text.accept((index, style, codePoint) -> {
+			plain.appendCodePoint(codePoint);
+
+			for (int i = 0; i < Character.charCount(codePoint); i++)
+				styles.add(style);
+
+			return true;
+		});
+
+		String found = plain.toString();
+
+		if (!found.contains(real)) return text;
+
+		MutableText swapped = Text.empty();
+		int i = 0;
+
+		while (i < found.length()) {
+			if (found.startsWith(real, i)) {
+				swapped.append(Text.literal(module.name.getValue()).setStyle(styles.get(i)));
+				i += real.length();
+				continue;
+			}
+
+			int codePoint = found.codePointAt(i);
+			swapped.append(Text.literal(Character.toString(codePoint)).setStyle(styles.get(i)));
+			i += Character.charCount(codePoint);
+		}
+
+		return swapped.asOrderedText();
+	}
+
+	private static NameHider active() {
+		NameHider module = System.INSTANCE.getModuleManager().getModule(NameHider.class);
+
+		if (module == null || !module.isEnabled() || System.mc.player == null) return null;
+
+		String shown = module.name.getValue();
+		String real = System.mc.player.getGameProfile().name();
+
+		if (real == null || real.isEmpty() || shown == null || shown.isEmpty()) return null;
+
+		return module;
 	}
 
 	private static Text swap(Text text, String real, String shown) {

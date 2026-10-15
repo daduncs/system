@@ -108,10 +108,20 @@ public final class Card {
 		return false;
 	}
 
+	private List<Row> shown() {
+		List<Row> shown = new ArrayList<>();
+
+		for (Row row : rows)
+			if (row.getSetting().isVisible())
+				shown.add(row);
+
+		return shown;
+	}
+
 	private int stack() {
 		int total = 0;
 
-		for (Row row : rows)
+		for (Row row : shown())
 			total += row.height();
 
 		return total;
@@ -205,7 +215,7 @@ public final class Card {
 				Render2D.drawRoundRect(context, x + PAD, y + 34, width - PAD - 10, 1, 0.5f, Theme.fade(Theme.divider, open.get() * alpha));
 
 				int rowY = y + 41;
-				for (Row row : rows) {
+				for (Row row : shown()) {
 					row.render(context, x + PAD, rowY, right - 10, mouseX, mouseY, delta, alpha);
 					boolean inScissor = mouseY >= y + HEAD && mouseY <= bottom;
 					if (inScissor && row.isHovered() && row.getSetting().shouldShowDescription() && row.getSetting().getDescription() != null) {
@@ -372,7 +382,7 @@ public final class Card {
 			return false;
 
 		int rowY = y + 41;
-		for (Row row : rows) {
+		for (Row row : shown()) {
 			if (row.click(x + PAD, rowY, x + width - 10, mouseX, mouseY, button))
 				return true;
 

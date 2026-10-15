@@ -45,6 +45,8 @@ public final class PipelineRegistry {
 	public static RenderPipeline STAIR_BORDER_PIPELINE;
 	public static RenderPipeline HEAD_PIPELINE;
 	public static RenderPipeline LYRICS_PIPELINE;
+	public static RenderPipeline COMIC_PIPELINE;
+	public static RenderPipeline LINES_PIPELINE;
 	public static RenderPipeline SKY_PIPELINE;
 	public static RenderPipeline PICKER_PIPELINE;
 	public static RenderPipeline LINE_PIPELINE;
@@ -109,6 +111,11 @@ public final class PipelineRegistry {
 		STAIR_BORDER_PIPELINE = build("stair_border", "stair_border", false);
 		HEAD_PIPELINE = build("head", "head", true);
 		LYRICS_PIPELINE = world("lyrics", "lyrics");
+		COMIC_PIPELINE = world("comic", "comic");
+		LINES_PIPELINE = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.RENDERTYPE_LINES_SNIPPET)
+				.withLocation(Identifier.of("system", "pipeline/lines"))
+				.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+				.build());
 		SKY_PIPELINE = build("sky", "sky", false);
 		PICKER_PIPELINE = build("picker", "picker", false);
 		LINE_PIPELINE = build("line", "line", false);

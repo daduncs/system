@@ -67,7 +67,7 @@ public final class WorldLyrics extends Module implements GameRenderListener {
 
 	public WorldLyrics() {
 		super(EncryptedString.of("World Lyrics"),
-				EncryptedString.of("your song, floating in front of you"),
+				EncryptedString.of("Lyrics of yo song showing in the world"),
 				-1,
 				Category.RENDER);
 		addSettings(artColours, flow, spawn, lifetime);

@@ -10,6 +10,7 @@
     "LivingEntityAccessor",
     "PlayerInteractEntityC2SPacketAccessor",
     "TeamMixin",
+    "TextRendererMixin",
     "WorldAccessor"
   ],
   "client": [
