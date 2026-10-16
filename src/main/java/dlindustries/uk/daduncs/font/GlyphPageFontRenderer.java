@@ -499,6 +499,26 @@ public final class GlyphPageFontRenderer {
 		return regularGlyphPage.getMaxFontHeight() / 2;
 	}
 
+	public float getInkLeft(CharSequence text) {
+		if (text == null || text.isEmpty()) return 0f;
+
+		return regularGlyphPage.inkLeft(text.charAt(0)) / 2f;
+	}
+
+	public float getInkWidth(CharSequence text) {
+		if (text == null || text.isEmpty()) return 0f;
+
+		float width = 0f;
+		int last = text.length() - 1;
+
+		for (int i = 0; i < last; i++)
+			width += regularGlyphPage.getWidth(text.charAt(i)) - 8;
+
+		width += regularGlyphPage.inkRight(text.charAt(last));
+
+		return (width - regularGlyphPage.inkLeft(text.charAt(0))) / 2f;
+	}
+
 	public int getStringWidth(CharSequence text) {
 		if (text == null) {
 			return 0;

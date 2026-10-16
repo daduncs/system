@@ -68,9 +68,21 @@ public final class Draw {
 		submit(context, PipelineRegistry.RECTANGLE_PIPELINE, TextureSetup.empty(), x, y, w, h, even(radii), color, 0f);
 	}
 
+	public static void gradient(DrawContext context, float x, float y, float w, float h, float[] radii, int left, int right) {
+		submit(context, PipelineRegistry.RECTANGLE_PIPELINE, TextureSetup.empty(), x, y, w, h, even(radii), left, left, right, right, 0f);
+	}
+
 	public static void picker(DrawContext context, float x, float y, float w, float h, float round, float hue, int mode) {
 		submit(context, PipelineRegistry.PICKER_PIPELINE, TextureSetup.empty(), x, y, w, h,
 				new float[]{round, mode, 0f, 0f}, 0xFFFFFFFF, hue * 100f);
+	}
+
+	public static void logo(DrawContext context, float x, float y, float w, float h, Identifier texture, int color) {
+		GpuTextureView view = MinecraftClient.getInstance().getTextureManager().getTexture(texture).getGlTextureView();
+		TextureSetup setup = TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+		float time = (java.lang.System.currentTimeMillis() % 600000L) / 1000f;
+
+		submit(context, PipelineRegistry.LOGO_PIPELINE, setup, x, y, w, h, new float[]{time, 0f, 0f, 0f}, color, 0f);
 	}
 
 	public static void border(DrawContext context, float x, float y, float w, float h, float[] radii, float thickness, int color) {
@@ -230,13 +242,20 @@ public final class Draw {
 	}
 
 	public static void stairBorder(DrawContext context, float x, float y, float w, float h,
-								   float above, float below, float round, float thickness, int color) {
-		submit(context, PipelineRegistry.STAIR_BORDER_PIPELINE, TextureSetup.empty(), x, y, w, h,
-				new float[]{above, below, round, 0f}, color, thickness);
+								   float above, float below, float round, float thickness, int top, int bottom) {
+		float grow = Math.max(0f, thickness - 1f);
+
+		submit(context, PipelineRegistry.STAIR_BORDER_PIPELINE, TextureSetup.empty(), x - grow, y - grow, w + grow * 2f, h + grow * 2f,
+				new float[]{above, below, round, grow}, top, bottom, bottom, top, thickness);
 	}
 
 	private static void submit(DrawContext context, RenderPipeline pipeline, TextureSetup setup,
 							   float x, float y, float w, float h, float[] radii, int color, float extra) {
+		submit(context, pipeline, setup, x, y, w, h, radii, color, color, color, color, extra);
+	}
+
+	private static void submit(DrawContext context, RenderPipeline pipeline, TextureSetup setup, float x, float y, float w, float h,
+							   float[] radii, int topLeft, int bottomLeft, int bottomRight, int topRight, float extra) {
 		if (pipeline == null || w <= 0f || h <= 0f)
 			return;
 
@@ -249,13 +268,13 @@ public final class Draw {
 
 		float u = margin / w;
 		float v = margin / h;
-		float left = x - margin, top = y - margin, right = x + w + margin, bottom = y + h + margin;
+		float x0 = x - margin, y0 = y - margin, x1 = x + w + margin, y1 = y + h + margin;
 
 		context.state.addSimpleElement(new GuiState(pipeline, setup, context, bounds, buffer -> {
-			corner(buffer, matrix, left, top, -u, -v, w, h, radii, color, extra);
-			corner(buffer, matrix, left, bottom, -u, 1f + v, w, h, radii, color, extra);
-			corner(buffer, matrix, right, bottom, 1f + u, 1f + v, w, h, radii, color, extra);
-			corner(buffer, matrix, right, top, 1f + u, -v, w, h, radii, color, extra);
+			corner(buffer, matrix, x0, y0, -u, -v, w, h, radii, topLeft, extra);
+			corner(buffer, matrix, x0, y1, -u, 1f + v, w, h, radii, bottomLeft, extra);
+			corner(buffer, matrix, x1, y1, 1f + u, 1f + v, w, h, radii, bottomRight, extra);
+			corner(buffer, matrix, x1, y0, 1f + u, -v, w, h, radii, topRight, extra);
 		}));
 	}
 

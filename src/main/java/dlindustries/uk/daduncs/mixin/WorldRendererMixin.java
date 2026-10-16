@@ -23,6 +23,7 @@ package dlindustries.uk.daduncs.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.module.modules.render.Esp;
+import dlindustries.uk.daduncs.module.modules.render.PopFx;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.command.OrderedRenderCommandQueueImpl;
 import net.minecraft.client.render.state.WorldRenderState;
@@ -38,18 +39,27 @@ public class WorldRendererMixin {
 	private void onRenderStart(CallbackInfo ci) {
 		Esp esp = esp();
 		if (esp != null) esp.beginFrame();
+
+		PopFx pops = pops();
+		if (pops != null) pops.beginFrame();
 	}
 
 	@Inject(method = "renderBlockEntities", at = @At("TAIL"))
 	private void onSubmitted(MatrixStack matrices, WorldRenderState state, OrderedRenderCommandQueueImpl queue, CallbackInfo ci) {
 		Esp esp = esp();
 		if (esp != null) esp.submit(state);
+
+		PopFx pops = pops();
+		if (pops != null) pops.submit(state);
 	}
 
 	@Inject(method = "render", at = @At("TAIL"))
 	private void onRenderEnd(CallbackInfo ci) {
 		Esp esp = esp();
 		if (esp != null) esp.composite();
+
+		PopFx pops = pops();
+		if (pops != null) pops.composite();
 	}
 
 	@ModifyExpressionValue(method = "fillEntityRenderStates", at = @At(value = "INVOKE",
@@ -75,5 +85,12 @@ public class WorldRendererMixin {
 
 		Esp esp = System.INSTANCE.getModuleManager().getModule(Esp.class);
 		return esp != null && esp.isEnabled() ? esp : null;
+	}
+
+	private static PopFx pops() {
+		if (System.INSTANCE == null || System.INSTANCE.getModuleManager() == null) return null;
+
+		PopFx pops = System.INSTANCE.getModuleManager().getModule(PopFx.class);
+		return pops != null && pops.isEnabled() ? pops : null;
 	}
 }

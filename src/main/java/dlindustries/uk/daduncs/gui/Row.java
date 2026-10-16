@@ -20,6 +20,7 @@
 
 package dlindustries.uk.daduncs.gui;
 
+import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.setting.Setting;
 import dlindustries.uk.daduncs.module.setting.bind;
 import dlindustries.uk.daduncs.module.setting.bool;
@@ -137,6 +138,17 @@ public final class Row {
 		Render2D.drawRoundOutline(context, right - 31, y + 5, 16, 16, 8, 1f, Theme.fade(Theme.off, alpha));
 	}
 
+	private void drawFill(DrawContext context, float x, float y, float width, float from, float to) {
+		if (!ClickGUI.sliderGradient.getValue()) {
+			Render2D.drawRoundRect(context, x, y, width, 6, 3, Theme.fade(Theme.accent, alpha));
+			return;
+		}
+
+		Render2D.drawGradientRect(context, x, y, width, 6, 3,
+				Theme.fade(Theme.lerp(Theme.accent, Theme.secondary, from), alpha),
+				Theme.fade(Theme.lerp(Theme.accent, Theme.secondary, to), alpha));
+	}
+
 	private void renderNumber(DrawContext context, number value, int right, int y) {
 		fit(right - 34 - 10);
 		int line = y + 11;
@@ -144,7 +156,7 @@ public final class Row {
 		knob.to(span(value.getValue(), value.getMin(), value.getMax()));
 
 		Render2D.drawRoundRect(context, trackLeft, line, track, 4, 2, Theme.fade(Theme.off, alpha));
-		Render2D.drawRoundRect(context, trackLeft, line - 1, track * knob.get(), 6, 3, Theme.fade(Theme.accent, alpha));
+		drawFill(context, trackLeft, line - 1, track * knob.get() + KNOB / 2f, 0f, knob.get());
 
 		float size = KNOB + grab.get() * 5f;
 		Render2D.drawRoundRect(context, trackLeft + track * knob.get() - size / 2f, line + 2f - size / 2f, size, size, size / 2f, Theme.fade(Theme.knob(), alpha));
@@ -222,7 +234,7 @@ public final class Row {
 		float highSize = KNOB + grabMax.get() * 5f;
 
 		Render2D.drawRoundRect(context, trackLeft, line, track, 4, 2, Theme.fade(Theme.off, alpha));
-		Render2D.drawRoundRect(context, trackLeft + low, line - 1, Math.max(0f, high - low), 6, 3, Theme.fade(Theme.accent, alpha));
+		drawFill(context, trackLeft + low - KNOB / 2f, line - 1, Math.max(0f, high - low) + KNOB, knob.get(), knobMax.get());
 		Render2D.drawRoundRect(context, trackLeft + low - lowSize / 2f, line + 2f - lowSize / 2f, lowSize, lowSize, lowSize / 2f, Theme.fade(Theme.knob(), alpha));
 		Render2D.drawRoundRect(context, trackLeft + high - highSize / 2f, line + 2f - highSize / 2f, highSize, highSize, highSize / 2f, Theme.fade(Theme.knob(), alpha));
 

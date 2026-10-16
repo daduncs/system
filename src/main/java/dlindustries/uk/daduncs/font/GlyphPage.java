@@ -138,6 +138,23 @@ public final class GlyphPage {
 
 			glyphCharacterMap.put(ch, glyph);
 		}
+
+		for (Glyph glyph : glyphCharacterMap.values())
+			measure(glyph);
+	}
+
+	private void measure(Glyph glyph) {
+		glyph.inkLeft = glyph.width;
+		glyph.inkRight = 0;
+
+		for (int px = 0; px < glyph.width && glyph.x + px < imgSize; px++) {
+			for (int py = 0; py < glyph.height && glyph.y + py < imgSize; py++) {
+				if ((bufferedImage.getRGB(glyph.x + px, glyph.y + py) >>> 24) > 32) {
+					glyph.inkLeft = Math.min(glyph.inkLeft, px);
+					glyph.inkRight = Math.max(glyph.inkRight, px + 1);
+				}
+			}
+		}
 	}
 
 	public void setupTexture() {
@@ -217,6 +234,16 @@ public final class GlyphPage {
 		return glyphCharacterMap.get(ch);
 	}
 
+	public int inkLeft(char ch) {
+		Glyph glyph = glyphCharacterMap.get(ch);
+		return glyph == null || glyph.inkRight == 0 ? 0 : glyph.inkLeft;
+	}
+
+	public int inkRight(char ch) {
+		Glyph glyph = glyphCharacterMap.get(ch);
+		return glyph == null || glyph.inkRight == 0 ? 0 : glyph.inkRight;
+	}
+
 	public float getWidth(char ch) {
 		Glyph glyph = glyphCharacterMap.get(ch);
 		return glyph == null ? 0 : glyph.width;
@@ -236,6 +263,8 @@ public final class GlyphPage {
 		private int y;
 		private int width;
 		private int height;
+		private int inkLeft;
+		private int inkRight;
 
 		Glyph(int x, int y, int width, int height) {
 			this.x = x;

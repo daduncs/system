@@ -24,6 +24,7 @@ import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.modules.misc.NameHider;
 import dlindustries.uk.daduncs.render.Draw;
 import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.EncryptedString;
@@ -545,10 +546,13 @@ public final class ClickGui extends Screen {
 		Identifier face = System.INSTANCE.getAccentManager().getAvatar();
 		if (face != null)
 			Render2D.drawRoundImage(context, x + 5, y + 360, 36, 36, 18f, face, Theme.fade(0xFFFFFFFF, alpha));
-		else Render2D.drawRoundImage(context, x + 5, y + 360, 36, 36, 18f, LOGO, Theme.fade(Theme.accent, alpha));
+		else Render2D.drawLogo(context, x + 5, y + 360, 36, 36, LOGO, Theme.fade(Theme.accent, alpha));
 
 		if (words > 0.01f) {
 			String who = System.INSTANCE.getAccentManager().getName();
+
+			if (who.isEmpty())
+				who = NameHider.hide(mc.getSession().getUsername());
 
 			if (!who.isEmpty())
 				TextRenderer.drawMenu("@" + who, context, x + 48, y + 377, Theme.fade(Theme.text, alpha * words));

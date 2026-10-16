@@ -42,10 +42,12 @@ import net.minecraft.client.render.block.entity.BlockEntityRenderer;
 import net.minecraft.client.render.block.entity.state.BlockEntityRenderState;
 import net.minecraft.client.render.command.RenderDispatcher;
 import net.minecraft.client.render.entity.state.EntityRenderState;
+import net.minecraft.client.render.item.ItemRenderState;
 import net.minecraft.client.render.state.WorldRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.ColorHelper;
+import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.OptionalInt;
@@ -92,6 +94,17 @@ public final class OutlineRenderer {
 		queue.setColor(color);
 		mc.getEntityRenderDispatcher().render(entity, world.cameraRenderState,
 				entity.x - camera.x, entity.y - camera.y, entity.z - camera.z, matrices, queue);
+	}
+
+	public void addItem(ItemRenderState item, WorldRenderState world, Vec3d spot, float yaw, float scale, int color) {
+		Vec3d camera = world.cameraRenderState.pos;
+		queue.setColor(color);
+		matrices.push();
+		matrices.translate(spot.x - camera.x, spot.y - camera.y, spot.z - camera.z);
+		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(yaw));
+		matrices.scale(scale, scale, scale);
+		item.render(matrices, queue, LightmapTextureManager.MAX_LIGHT_COORDINATE, OverlayTexture.DEFAULT_UV, 0);
+		matrices.pop();
 	}
 
 	public void addBlock(BlockEntity blockEntity, WorldRenderState world, int color) {

@@ -1,5 +1,7 @@
 #version 330
 
+#moj_import <system:stair.glsl>
+
 layout(std140) uniform DynamicTransforms {
     mat4 ModelViewMat;
     vec4 ColorModulator;
@@ -19,45 +21,6 @@ out vec4 fragColor;
 
 const int SAMPLES = 48;
 const float GOLDEN = 2.39996323;
-
-float boxAt(vec2 point, float left, float top, float width, float height, vec4 radii) {
-    vec2 centre = vec2(left + width * 0.5, top + height * 0.5);
-    vec2 halfSize = vec2(width * 0.5, height * 0.5);
-    vec2 local = point - centre;
-
-    float radius = (local.x > 0.0)
-        ? ((local.y > 0.0) ? radii.z : radii.w)
-        : ((local.y > 0.0) ? radii.y : radii.x);
-
-    radius = min(radius, min(halfSize.x, halfSize.y));
-
-    vec2 offset = abs(local) - halfSize + radius;
-    return min(max(offset.x, offset.y), 0.0) + length(max(offset, 0.0)) - radius;
-}
-
-float stairDistance(vec2 point, vec2 size, vec4 corners) {
-    float bend = corners.z;
-    float own = size.x - bend;
-    float tall = size.y;
-    float above = corners.x;
-    float below = corners.y;
-
-    float topLeft = above > 0.5 ? 0.0 : bend;
-    float topRight = above > 0.5 ? 0.0 : bend;
-    float bottomLeft = below > 0.5 ? 0.0 : bend;
-
-    float dist = boxAt(point, 0.0, 0.0, own, tall, vec4(topLeft, bottomLeft, bend, topRight));
-
-    if (above > 0.5)
-        dist = min(dist, boxAt(point, 0.0, -tall, min(above, own), tall * 2.0,
-            vec4(0.0, bottomLeft, bend, 0.0)));
-
-    if (below > 0.5)
-        dist = min(dist, boxAt(point, 0.0, 0.0, min(below, own), tall * 2.0,
-            vec4(topLeft, 0.0, 0.0, topRight)));
-
-    return dist;
-}
 
 float edge(float dist) {
     float aa = max(fwidth(dist), 1.0e-4);

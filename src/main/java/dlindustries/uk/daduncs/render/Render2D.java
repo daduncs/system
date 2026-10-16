@@ -42,6 +42,14 @@ public final class Render2D {
 		Draw.picker(context, x, y, width, height, round, hue, mode);
 	}
 
+	public static void drawLogo(DrawContext context, float x, float y, float width, float height, Identifier texture, int color) {
+		Draw.logo(context, x, y, width, height, texture, color);
+	}
+
+	public static void drawGradientRect(DrawContext context, float x, float y, float width, float height, float round, int left, int right) {
+		Draw.gradient(context, x, y, width, height, all(round), left, right);
+	}
+
 	public static void drawRoundRect(DrawContext context, float x, float y, float width, float height, float round, int color) {
 		Draw.rect(context, x, y, width, height, all(round), color);
 	}
@@ -91,7 +99,12 @@ public final class Render2D {
 
 	public static void drawStairOutline(DrawContext context, float x, float y, float width, float height,
 										float above, float below, float round, float thickness, int color) {
-		Draw.stairBorder(context, x, y, width + round, height, above, below, bend(round), thickness, color);
+		drawStairOutline(context, x, y, width, height, above, below, round, thickness, color, color);
+	}
+
+	public static void drawStairOutline(DrawContext context, float x, float y, float width, float height,
+										float above, float below, float round, float thickness, int top, int bottom) {
+		Draw.stairBorder(context, x, y, width + round, height, above, below, bend(round), thickness, top, bottom);
 	}
 
 	public static void drawHead(DrawContext context, float x, float y, float size, float round, Identifier skin, int color) {

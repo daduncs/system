@@ -52,6 +52,7 @@ public final class PipelineRegistry {
 	public static RenderPipeline LINE_PIPELINE;
 	public static RenderPipeline SHAPE_PIPELINE;
 	public static RenderPipeline FROST_PIPELINE;
+	public static RenderPipeline LOGO_PIPELINE;
 
 	private static VertexFormat format() {
 		return VertexFormat.builder()
@@ -121,6 +122,7 @@ public final class PipelineRegistry {
 		LINE_PIPELINE = build("line", "line", false);
 		SHAPE_PIPELINE = build("shape", "shape", false);
 		FROST_PIPELINE = build("frost", "frost", true);
+		LOGO_PIPELINE = build("logo", "logo", true);
 	}
 
 	private PipelineRegistry() {

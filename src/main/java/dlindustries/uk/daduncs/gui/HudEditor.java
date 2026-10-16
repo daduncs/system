@@ -162,7 +162,7 @@ public final class HudEditor {
 			int label = TextRenderer.smallWidth(hovered.getName()) + 5;
 
 			Render2D.drawRoundOutline(context, box[0] - 3, box[1] - 3, box[2] + 6, box[3] + 6, 2, 1, Theme.accent);
-			Render2D.drawRoundRect(context, box[0] - 3, box[1] - 15, label, 13, 2, Theme.accent);
+			Render2D.drawRoundRect(context, box[0] - 3, box[1] - 15, label, 13, new float[]{2, 0, 2, 2}, Theme.accent);
 			TextRenderer.drawSmall(hovered.getName(), context, box[0] - 1, box[1] - 8, 0xFF141414);
 		}
 

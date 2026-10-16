@@ -22,6 +22,8 @@ package dlindustries.uk.daduncs.module.modules.render;
 
 import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.event.events.HudListener;
+import dlindustries.uk.daduncs.font.Fonts;
+import dlindustries.uk.daduncs.font.GlyphPageFontRenderer;
 import dlindustries.uk.daduncs.gui.Anim;
 import dlindustries.uk.daduncs.gui.Frame;
 import dlindustries.uk.daduncs.gui.HudEditor;
@@ -30,6 +32,7 @@ import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.setting.bool;
+import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.EncryptedString;
@@ -45,11 +48,20 @@ import java.util.Map;
 
 public final class ModuleHud extends Module implements HudListener {
 
-	private static final float ROUND = 3f;
+	public enum Face {
+		Default, Chakra, Rajdhani, Titillium, Michroma, Poppins
+	}
 
+	private static final float ROUND = 3f;
+	private static final int SNAP = 3;
+
+	private final mode<Face> font = new mode<>(EncryptedString.of("Font"), Face.Default, Face.class);
 	private final bool gradient = new bool(EncryptedString.of("Gradient"), true);
 	private final bool outline = new bool(EncryptedString.of("Outline"), false);
-	private final number padding = new number(EncryptedString.of("Padding"), 0, 10, 4, 1);
+	private final number thickness = new number(EncryptedString.of("Outline Thickness"), 1, 5, 1, 1).setVisibility(outline::getValue);
+	private final bool outlineGradient = new bool(EncryptedString.of("Outline Gradient"), true).setVisibility(outline::getValue);
+	private final number padding = new number(EncryptedString.of("Padding Y"), 0, 10, 4, 1);
+	private final number paddingX = new number(EncryptedString.of("Padding X"), 0, 10, 4, 1);
 	private final number speed = new number(EncryptedString.of("Speed"), 1, 20, 9, 1);
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
 
@@ -63,7 +75,7 @@ public final class ModuleHud extends Module implements HudListener {
 				EncryptedString.of("Lists what you have on"),
 				-1,
 				Category.RENDER);
-		addSettings(gradient, outline, padding, speed, size);
+		addSettings(font, gradient, outline, thickness, outlineGradient, padding, paddingX, speed, size);
 		HudEditor.register(this);
 	}
 
@@ -101,6 +113,7 @@ public final class ModuleHud extends Module implements HudListener {
 		List<float[]> shape = new ArrayList<>();
 
 		float offset = top;
+		int previous = 0;
 		for (Module module : showing) {
 			Anim anim = slide.get(module);
 			anim.update(delta);
@@ -109,7 +122,11 @@ public final class ModuleHud extends Module implements HudListener {
 			if (shown <= 0.01f)
 				continue;
 
-			int width = TextRenderer.smallWidth(module.getName()) + 9;
+			int width = nameWidth(module) + paddingX.getValueInt() * 2;
+			if (previous > 0 && previous - width < SNAP)
+				width = previous;
+			previous = width;
+
 			float tall = row * shown;
 
 			visible.add(module);
@@ -171,8 +188,11 @@ public final class ModuleHud extends Module implements HudListener {
 				float above = i > 0 ? runs.get(i - 1)[2] : 0f;
 				float below = i < runs.size() - 1 ? runs.get(i + 1)[2] : 0f;
 
+				int upper = outlineGradient.getValue() ? shade((run[1] - top) / (offset - top)) : Theme.accent;
+				int lower = outlineGradient.getValue() ? shade((run[1] + run[3] - top) / (offset - top)) : Theme.accent;
+
 				Render2D.drawStairOutline(context, run[0], run[1], run[2], run[3], above, below, ROUND,
-						1f, Theme.fade(Theme.accent, run[4]));
+						thickness.getValueFloat(), Theme.fade(upper, run[4]), Theme.fade(lower, run[4]));
 			}
 
 		if (mirror)
@@ -188,15 +208,11 @@ public final class ModuleHud extends Module implements HudListener {
 				continue;
 
 			float span = visible.size() > 1 ? (float) i / (visible.size() - 1) : 0f;
-			float wave = (span * 0.7f + drift) % 1f;
-
-			int colour = gradient.getValue()
-					? Theme.lerp(Theme.accent, Theme.text, wave < 0.5f ? wave * 2f : (1f - wave) * 2f)
-					: Theme.text;
+			int colour = gradient.getValue() ? shade(span) : Theme.text;
 
 			float left = mirror ? 2f * axis - slot[0] - slot[2] : slot[0];
 
-			TextRenderer.drawSmall(visible.get(i).getName(), context, (int) left + 3, (int) (slot[1] + row) - 7,
+			drawName(visible.get(i), context, (int) left + paddingX.getValueInt(), (int) (slot[1] + row) - 7,
 					Theme.fade(colour, (slot[3] - 0.6f) / 0.4f));
 		}
 
@@ -204,6 +220,40 @@ public final class ModuleHud extends Module implements HudListener {
 
 		HudEditor.bounds(this, base, top, widest, Math.max(row, (int) (offset - top)));
 		HudEditor.pop(context);
+	}
+
+	private GlyphPageFontRenderer face() {
+		return switch (font.getMode()) {
+			case Default -> ClickGUI.modern.getValue() ? Fonts.SMALL : null;
+			case Chakra -> Fonts.CHAKRA;
+			case Rajdhani -> Fonts.RAJDHANI;
+			case Titillium -> Fonts.TITILLIUM;
+			case Michroma -> Fonts.MICHROMA;
+			case Poppins -> Fonts.POPPINS;
+		};
+	}
+
+	private int nameWidth(Module module) {
+		GlyphPageFontRenderer face = face();
+
+		return face == null ? TextRenderer.smallWidth(module.getName()) : Math.round(face.getInkWidth(module.getName()));
+	}
+
+	private void drawName(Module module, DrawContext context, int x, int y, int color) {
+		GlyphPageFontRenderer face = face();
+
+		if (face == null) {
+			TextRenderer.drawSmall(module.getName(), context, x, y, color);
+			return;
+		}
+
+		face.drawString(context, module.getName(), x - face.getInkLeft(module.getName()), y - 4 + (Fonts.SMALL.getFontHeight() - face.getFontHeight()) / 2f, color);
+	}
+
+	private int shade(float span) {
+		float wave = (span * 0.7f + drift) % 1f;
+
+		return Theme.lerp(Theme.accent, Theme.text, wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
 	}
 
 	private static boolean allign(float[] run, float[] row) {
@@ -232,6 +282,6 @@ public final class ModuleHud extends Module implements HudListener {
 			return gone;
 		});
 
-		showing.sort(Comparator.comparingInt((Module module) -> TextRenderer.tinyWidth(module.getName())).reversed());
+		showing.sort(Comparator.comparingInt(this::nameWidth).reversed());
 	}
 }

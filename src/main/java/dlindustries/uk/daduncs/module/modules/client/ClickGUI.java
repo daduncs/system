@@ -65,6 +65,8 @@ public final class ClickGUI extends Module {
 
 	public static final colour yours = new colour(EncryptedString.of("Your Color"), 0xFF9B6DFF);
 
+	public static final bool sliderGradient = new bool(EncryptedString.of("Slider Gradient"), true);
+
 	public enum Ui {
 		System, SystemDuo, Argon, Muon
 	}
@@ -129,7 +131,7 @@ public final class ClickGUI extends Module {
 				GLFW.GLFW_KEY_RIGHT_SHIFT,
 				Category.CLIENT);
 
-		addSettings(ui, guiSize, openCloseSounds, uiSounds, theme, yours, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
+		addSettings(ui, guiSize, openCloseSounds, uiSounds, theme, yours, sliderGradient, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
 	}
 
 	@Override
