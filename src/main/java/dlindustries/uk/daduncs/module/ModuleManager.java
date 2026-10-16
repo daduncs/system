@@ -101,6 +101,7 @@ public final class ModuleManager implements ButtonListener {
 		add(new MusicHud());
 		add(new WorldLyrics());
 		add(new HitFx());
+		add(new Nametags());
 
 		add(new AutoMaceV1());
 		add(new MaceSwap());

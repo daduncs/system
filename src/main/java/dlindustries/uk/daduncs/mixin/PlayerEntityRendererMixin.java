@@ -20,6 +20,7 @@
 
 package dlindustries.uk.daduncs.mixin;
 
+import dlindustries.uk.daduncs.module.modules.render.Nametags;
 import dlindustries.uk.daduncs.utils.rotation.SilentRot;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
@@ -37,6 +38,11 @@ public class PlayerEntityRendererMixin {
 
 	@Inject(method = "updateRenderState(Lnet/minecraft/entity/PlayerLikeEntity;Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;F)V", at = @At("TAIL"))
 	private void showSilentRotation(PlayerLikeEntity player, PlayerEntityRenderState state, float tickProgress, CallbackInfo ci) {
+		if (Nametags.hidesVanilla()) {
+			state.displayName = null;
+			state.playerName = null;
+		}
+
 		if (mc == null || mc.player == null || player != mc.player) return;
 		if (mc.options.getPerspective().isFirstPerson() || !SilentRot.on()) return;
 
