@@ -131,6 +131,7 @@ public final class Freecam extends Module implements TickListener, CameraUpdateL
 		pos = pos.add(vec3d5);
 	}
 
+
 	@Override
 	public void onCameraUpdate(CameraUpdateEvent event) {
 		float tickDelta = mc.getRenderTickCounter().getTickProgress(true);
@@ -141,5 +142,6 @@ public final class Freecam extends Module implements TickListener, CameraUpdateL
 		event.setX(MathHelper.lerp(tickDelta, oldPos.x, pos.x));
 		event.setY(MathHelper.lerp(tickDelta, oldPos.y, pos.y));
 		event.setZ(MathHelper.lerp(tickDelta, oldPos.z, pos.z));
+
 	}
 }

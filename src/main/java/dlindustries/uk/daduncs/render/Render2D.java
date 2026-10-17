@@ -20,6 +20,7 @@
 
 package dlindustries.uk.daduncs.render;
 
+import dlindustries.uk.daduncs.gui.Theme;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
 
@@ -95,6 +96,22 @@ public final class Render2D {
 	public static void drawStair(DrawContext context, float x, float y, float width, float height,
 								 float above, float below, float round, float blur, int color, float opacity) {
 		Draw.stairFill(context, x, y, width + round, height, above, below, bend(round), blur, color, opacity);
+	}
+
+	public static void drawFade(DrawContext context, float x, float y, float width, float height, float round, float spread, int left, int right) {
+		Draw.fade(context, x, y, width, height, bend(round), spread, left, left, right, right, 60f);
+	}
+
+	public static void drawFade(DrawContext context, float x, float y, float width, float height, float round, float spread,
+								int topLeft, int bottomLeft, int bottomRight, int topRight, float strength) {
+		Draw.fade(context, x, y, width, height, bend(round), spread, topLeft, bottomLeft, bottomRight, topRight, strength);
+	}
+
+	public static void drawFade(DrawContext context, float x, float y, float width, float height, float round, float spread, boolean gradient, float alpha) {
+		int left = Theme.fade(gradient ? Theme.flow(0f) : Theme.accent, alpha);
+		int right = Theme.fade(gradient ? Theme.flow(1f) : Theme.accent, alpha);
+
+		Draw.fade(context, x, y, width, height, bend(round), spread, left, left, right, right, 60f);
 	}
 
 	public static void drawStairOutline(DrawContext context, float x, float y, float width, float height,

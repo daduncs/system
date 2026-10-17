@@ -31,6 +31,7 @@ import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.EncryptedString;
+import dlindustries.uk.daduncs.utils.ProjectionUtils;
 import dlindustries.uk.daduncs.utils.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
@@ -54,6 +55,7 @@ public final class TargetHud extends Module implements HudListener {
 	private static final int MIN_WIDTH = 140;
 	private static final int HEIGHT = 44;
 	private static final int FACE = 30;
+	private static final long GRACE = 400;
 	private static final int HURT = 0xFFFF5A5A;
 	private static final Identifier BLOOM = Identifier.of("system", "textures/bloom.png");
 	private static final EquipmentSlot[] ARMOR = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
@@ -64,6 +66,11 @@ public final class TargetHud extends Module implements HudListener {
 			.setDescription(EncryptedString.of("Little sparks fly off the face on hit"));
 	private final bool outline = new bool(EncryptedString.of("Outline"), false);
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
+	private final bool healthGradient = new bool(EncryptedString.of("Health Gradient"), true);
+	private final bool stick = new bool(EncryptedString.of("Stick To Player"), false);
+	private final bool fading = new bool(EncryptedString.of("Fade"), false);
+	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
+	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
 	private final bool hideFriends = new bool(EncryptedString.of("Hide Friends"), true)
 			.setDescription(EncryptedString.of("Doesn't show the hud for friends"));
 
@@ -77,6 +84,14 @@ public final class TargetHud extends Module implements HudListener {
 	private final List<Spark> sparks = new ArrayList<>();
 	private final Random random = new Random();
 
+	private float floatX;
+	private float floatY;
+	private boolean placed;
+	private boolean arrived;
+	private float pinX;
+	private float pinY;
+	private long seen;
+
 	private LivingEntity target;
 	private LivingEntity drawn;
 	private LivingEntity fighting;
@@ -88,7 +103,7 @@ public final class TargetHud extends Module implements HudListener {
 				EncryptedString.of("Shows who you are fighting"),
 				-1,
 				Category.RENDER);
-		addSettings(tint, particles, keepOpen, timeout, outline, size, hideFriends);
+		addSettings(tint, particles, keepOpen, timeout, outline, size, healthGradient, stick, hideFriends, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 	}
 
@@ -127,8 +142,10 @@ public final class TargetHud extends Module implements HudListener {
 		show.to(target != null ? 1f : 0f);
 		show.update(delta);
 
-		if (show.get() <= 0.02f || drawn == null)
+		if (show.get() <= 0.02f || drawn == null) {
+			placed = false;
 			return;
+		}
 
 		float open = show.get();
 		float grow = ease(Math.min(1f, open / 0.8f));
@@ -146,14 +163,53 @@ public final class TargetHud extends Module implements HudListener {
 
 		int x = HudEditor.x(this, 8);
 		int y = HudEditor.y(this, 220);
+		float scale = size.getValueFloat() / 100f;
 
-		HudEditor.push(context, size.getValueFloat() / 100f, x, y);
+		float aimX = x;
+		float aimY = y;
+		boolean stuck = false;
+
+		if (stick.getValue() && !HudEditor.editing()) {
+			ProjectionUtils.ProjectedPoint point = ProjectionUtils.project(drawn.getLerpedPos(event.delta).add(0, drawn.getHeight() * 0.6, 0));
+			long now = java.lang.System.currentTimeMillis();
+
+			if (point != null && point.x() > -full * scale && point.y() > -HEIGHT * scale
+					&& point.x() < mc.getWindow().getScaledWidth() && point.y() < mc.getWindow().getScaledHeight() + HEIGHT * scale) {
+				pinX = point.x();
+				pinY = point.y() - HEIGHT * scale / 2f;
+				seen = now;
+			}
+
+			if (now - seen < GRACE) {
+				aimX = pinX;
+				aimY = pinY;
+				stuck = true;
+			}
+		}
+
+		if (!placed || !stick.getValue() || HudEditor.editing() || stuck && arrived) {
+			floatX = aimX;
+			floatY = aimY;
+			placed = true;
+		} else {
+			float follow = 1f - (float) Math.exp(-delta * 10f);
+			floatX += (aimX - floatX) * follow;
+			floatY += (aimY - floatY) * follow;
+		}
+
+		arrived = stuck && Math.abs(aimX - floatX) < 1f && Math.abs(aimY - floatY) < 1f;
+
+		int panelX = Math.round(floatX);
+		int panelY = Math.round(floatY);
+
+		HudEditor.push(context, scale, panelX, panelY);
 		HudEditor.bounds(this, x, y, full, HEIGHT);
 
 		int width = Math.round(HEIGHT + (full - HEIGHT) * grow);
 		int height = HEIGHT;
-		int panelX = x;
-		int panelY = y;
+
+		if (fading.getValue())
+			Render2D.drawFade(context, panelX, panelY, width, height, 12, fadeSize.getValueFloat(), fadeGradient.getValue(), fade);
 
 		if (ClickGUI.hudGlass.getValue())
 			Render2D.drawBubble(context, panelX, panelY, width, height, 12, Theme.SHEEN, 7f, 0.35f, 0x66101010, fade);
@@ -195,8 +251,12 @@ public final class TargetHud extends Module implements HudListener {
 		item(context, drawn.getOffHandStack(), right - 8, panelY + 20);
 
 		Render2D.drawRoundRect(context, left, panelY + 32, right - left, 4, 2, Theme.fade(Theme.off, fade));
-		if (health.get() > 0)
-			Render2D.drawRoundRect(context, left, panelY + 32, (right - left) * health.get(), 4, 2, Theme.fade(Theme.accent, fade));
+		if (health.get() > 0) {
+			if (healthGradient.getValue())
+				Render2D.drawGradientRect(context, left, panelY + 32, (right - left) * health.get(), 4, 2, Theme.fade(Theme.flow(0f), fade),
+						Theme.fade(Theme.flow(health.get()), fade));
+			else Render2D.drawRoundRect(context, left, panelY + 32, (right - left) * health.get(), 4, 2, Theme.fade(Theme.accent, fade));
+		}
 
 		context.disableScissor();
 		HudEditor.pop(context);

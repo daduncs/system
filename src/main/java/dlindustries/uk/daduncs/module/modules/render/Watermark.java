@@ -28,6 +28,7 @@ import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.setting.mode;
+import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.render.Render2D;
@@ -46,6 +47,9 @@ public final class Watermark extends Module implements HudListener {
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
 	private final number glow = new number(EncryptedString.of("Glow"), 0, 10, 10, 1);
 	private final number speed = new number(EncryptedString.of("Speed"), 1, 20, 20, 1);
+	private final bool fading = new bool(EncryptedString.of("Fade"), false);
+	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
+	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
 	private float drift;
 
 	public Watermark() {
@@ -53,7 +57,7 @@ public final class Watermark extends Module implements HudListener {
 				EncryptedString.of("Shows the client name"),
 				-1,
 				Category.RENDER);
-		addSettings(style, size, glow, speed);
+		addSettings(style, size, glow, speed, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 	}
 
@@ -93,7 +97,7 @@ public final class Watermark extends Module implements HudListener {
 			String letter = String.valueOf(LABEL.charAt(i));
 			float wave = ((float) i / LABEL.length() + drift) % 1f;
 			float lit = wave < 0.5f ? wave * 2f : (1f - wave) * 2f;
-			int colour = Theme.lerp(Theme.accent, Theme.text, lit);
+			int colour = Theme.lerp(Theme.accent, Theme.flowEnd(), lit);
 
 			float spread = glow.getValueFloat();
 			if (spread > 0) TextRenderer.drawBoldGlow(letter, context, cursor, y + 15, Theme.fade(colour, 0.35f + 0.45f * lit), spread * 4f);
@@ -113,6 +117,9 @@ public final class Watermark extends Module implements HudListener {
 		int tall = 20;
 
 		HudEditor.bounds(this, x, y, width, tall);
+		if (fading.getValue())
+			Render2D.drawFade(context, x, y, width, tall, tall / 2f, fadeSize.getValueFloat(), fadeGradient.getValue(), 1f);
+
 		if (ClickGUI.hudGlass.getValue()) {
 			Render2D.drawBubble(context, x, y, width, tall, tall / 2f, Theme.SHEEN, 7f, 0.35f, 0x66101010, 1f);
 		} else {
@@ -123,7 +130,7 @@ public final class Watermark extends Module implements HudListener {
 		for (int i = 0; i < LABEL.length(); i++) {
 			String letter = String.valueOf(LABEL.charAt(i));
 			float wave = ((float) i / LABEL.length() + drift) % 1f;
-			int colour = Theme.lerp(Theme.accent, Theme.secondary, wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
+			int colour = Theme.lerp(Theme.accent, Theme.flowEnd(), wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
 
 			TextRenderer.drawMenu(letter, context, cursor, y + tall / 2 - 2, colour);
 			cursor += TextRenderer.menuWidth(letter);

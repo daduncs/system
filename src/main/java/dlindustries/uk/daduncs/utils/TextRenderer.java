@@ -21,10 +21,14 @@
 package dlindustries.uk.daduncs.utils;
 
 import dlindustries.uk.daduncs.font.Fonts;
+import dlindustries.uk.daduncs.font.GlyphPageFontRenderer;
+import dlindustries.uk.daduncs.font.ScriptFonts;
 import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import net.minecraft.client.gui.DrawContext;
 import org.joml.Matrix3x2fStack;
+
+import java.awt.Font;
 
 import static dlindustries.uk.daduncs.System.mc;
 
@@ -33,6 +37,11 @@ public final class TextRenderer {
 
 	private static boolean modern() {
 		return ClickGUI.modern.getValue();
+	}
+
+	private static GlyphPageFontRenderer face(CharSequence string, GlyphPageFontRenderer font, int size, int style) {
+		GlyphPageFontRenderer script = ScriptFonts.of(string, size, style);
+		return script == null ? font : script;
 	}
 
 	private static void vanilla(CharSequence string, DrawContext context, int x, int y, int color, float scale, int drop) {
@@ -152,7 +161,7 @@ public final class TextRenderer {
 			return;
 		}
 
-		Fonts.SMALL.drawString(context, string, x, y - 4, color);
+		face(string, Fonts.SMALL, 18, Font.PLAIN).drawString(context, string, x, y - 4, color);
 	}
 
 	public static void drawButton(CharSequence string, DrawContext context, float x, float y, int color) {
@@ -179,7 +188,7 @@ public final class TextRenderer {
 			return;
 		}
 
-		Fonts.SMALLBOLD.drawString(context, string, x, y - 4, color);
+		face(string, Fonts.SMALLBOLD, 20, Font.BOLD).drawString(context, string, x, y - 4, color);
 	}
 
 	public static void drawTiny(CharSequence string, DrawContext context, int x, int y, int color) {
@@ -188,7 +197,7 @@ public final class TextRenderer {
 			return;
 		}
 
-		Fonts.TINY.drawString(context, string, x, y - 4, color);
+		face(string, Fonts.TINY, 15, Font.PLAIN).drawString(context, string, x, y - 4, color);
 	}
 
 	public static void drawBoldCentered(CharSequence string, DrawContext context, int x, int y, int color) {
@@ -232,7 +241,7 @@ public final class TextRenderer {
 	}
 
 	public static int smallWidth(CharSequence string) {
-		return modern() ? Fonts.SMALL.getStringWidth(string) : vanillaWidth(string, 1.1f);
+		return modern() ? face(string, Fonts.SMALL, 18, Font.PLAIN).getStringWidth(string) : vanillaWidth(string, 1.1f);
 	}
 
 	public static int buttonWidth(CharSequence string) {
@@ -244,11 +253,11 @@ public final class TextRenderer {
 	}
 
 	public static int smallBoldWidth(CharSequence string) {
-		return modern() ? Fonts.SMALLBOLD.getStringWidth(string) : vanillaWidth(string, 1.2f);
+		return modern() ? face(string, Fonts.SMALLBOLD, 20, Font.BOLD).getStringWidth(string) : vanillaWidth(string, 1.2f);
 	}
 
 	public static int tinyWidth(CharSequence string) {
-		return modern() ? Fonts.TINY.getStringWidth(string) : vanillaWidth(string, 0.9f);
+		return modern() ? face(string, Fonts.TINY, 15, Font.PLAIN).getStringWidth(string) : vanillaWidth(string, 0.9f);
 	}
 
 	public static int tinyHeight() {

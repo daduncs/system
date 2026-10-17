@@ -43,6 +43,7 @@ public final class PipelineRegistry {
 	public static RenderPipeline STAIR_BLUR_PIPELINE;
 	public static RenderPipeline STAIR_GLASS_PIPELINE;
 	public static RenderPipeline STAIR_BORDER_PIPELINE;
+	public static RenderPipeline FADE_PIPELINE;
 	public static RenderPipeline HEAD_PIPELINE;
 	public static RenderPipeline LYRICS_PIPELINE;
 	public static RenderPipeline COMIC_PIPELINE;
@@ -110,6 +111,7 @@ public final class PipelineRegistry {
 		STAIR_BLUR_PIPELINE = build("stair_blur", "stair_blur", true);
 		STAIR_GLASS_PIPELINE = build("stair_glass", "stair_glass", true);
 		STAIR_BORDER_PIPELINE = build("stair_border", "stair_border", false);
+		FADE_PIPELINE = build("fade", "glow", false);
 		HEAD_PIPELINE = build("head", "head", true);
 		LYRICS_PIPELINE = world("lyrics", "lyrics");
 		COMIC_PIPELINE = world("comic", "comic");

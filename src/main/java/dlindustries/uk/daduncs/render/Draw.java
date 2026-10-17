@@ -241,6 +241,14 @@ public final class Draw {
 		return (alpha << 24) | (color & 0xFFFFFF);
 	}
 
+	public static void fade(DrawContext context, float x, float y, float w, float h, float round, float spread,
+							int topLeft, int bottomLeft, int bottomRight, int topRight, float strength) {
+		float margin = spread * 1.5f;
+
+		submit(context, PipelineRegistry.FADE_PIPELINE, TextureSetup.empty(), x - margin, y - margin, w + margin * 2f, h + margin * 2f,
+				new float[]{margin, spread / 2f, round, 0f}, topLeft, bottomLeft, bottomRight, topRight, strength);
+	}
+
 	public static void stairBorder(DrawContext context, float x, float y, float w, float h,
 								   float above, float below, float round, float thickness, int top, int bottom) {
 		float grow = Math.max(0f, thickness - 1f);

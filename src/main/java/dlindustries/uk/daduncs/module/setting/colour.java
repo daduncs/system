@@ -20,6 +20,8 @@
 
 package dlindustries.uk.daduncs.module.setting;
 
+import dlindustries.uk.daduncs.gui.Theme;
+
 public final class colour extends Setting<colour> {
 
 	private float hue;
@@ -62,6 +64,10 @@ public final class colour extends Setting<colour> {
 	}
 
 	public int getValue() {
+		return Theme.synced(getPicked());
+	}
+
+	public int getPicked() {
 		return pack(hue, saturation, brightness);
 	}
 

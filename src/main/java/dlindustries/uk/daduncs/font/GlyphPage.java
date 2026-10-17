@@ -222,6 +222,11 @@ public final class GlyphPage {
 		return glyph.width - 8;
 	}
 
+	void destroy() {
+		if (textureId != null)
+			MinecraftClient.getInstance().getTextureManager().destroyTexture(textureId);
+	}
+
 	Identifier texture() {
 		return textureId;
 	}

@@ -24,6 +24,7 @@ import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.gui.ClickGui;
 import dlindustries.uk.daduncs.gui.muon.MuonGui;
 import dlindustries.uk.daduncs.gui.Theme;
+import dlindustries.uk.daduncs.managers.MediaManager;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
@@ -67,6 +68,12 @@ public final class ClickGUI extends Module {
 
 	public static final bool sliderGradient = new bool(EncryptedString.of("Slider Gradient"), true);
 
+	public static final bool fade = new bool(EncryptedString.of("Fade"), false);
+	public static final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fade::getValue);
+	public static final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fade::getValue);
+	public static final number gradientSpeed = new number(EncryptedString.of("Gradient Speed"), 0, 5, 1, 0.1);
+	public static final bool syncCover = new bool(EncryptedString.of("SyncVisualsToArtCover"), false).setCompact(true);
+
 	public enum Ui {
 		System, SystemDuo, Argon, Muon
 	}
@@ -77,52 +84,61 @@ public final class ClickGUI extends Module {
 	}
 
 	public static void syncTheme() {
+		int accent;
+		int secondary;
+
 		switch (theme.getMode()) {
 			case System -> {
-				Theme.accent = 0xFF9B6DFF;
-				Theme.secondary = 0xFFFFFFFF;
+				accent = 0xFF9B6DFF;
+				secondary = 0xFFFFFFFF;
 			}
 			case Goon -> {
-				Theme.accent = 0xFFEFEFEF;
-				Theme.secondary = 0xFF8A8A8E;
+				accent = 0xFFEFEFEF;
+				secondary = 0xFF8A8A8E;
 			}
 			case Blood -> {
-				Theme.accent = 0xFFCE3540;
-				Theme.secondary = 0xFF1A1A1A;
+				accent = 0xFFCE3540;
+				secondary = 0xFF1A1A1A;
 			}
 			case Signal_Blue -> {
-				Theme.accent = 0xFF0057FF;
-				Theme.secondary = 0xFFF8F7F4;
+				accent = 0xFF0057FF;
+				secondary = 0xFFF8F7F4;
 			}
 			case Royal_Iris -> {
-				Theme.accent = 0xFFFFF275;
-				Theme.secondary = 0xFF3A0CA3;
+				accent = 0xFFFFF275;
+				secondary = 0xFF3A0CA3;
 			}
 			case Lime -> {
-				Theme.accent = 0xFFB6FF2E;
-				Theme.secondary = 0xFF23262F;
+				accent = 0xFFB6FF2E;
+				secondary = 0xFF23262F;
 			}
 			case Dragonfruit -> {
-				Theme.accent = 0xFFFF4696;
-				Theme.secondary = 0xFF1E1033;
+				accent = 0xFFFF4696;
+				secondary = 0xFF1E1033;
 			}
 			case Mint -> {
-				Theme.accent = 0xFF064E3B;
-				Theme.secondary = 0xFFF8E7C9;
+				accent = 0xFF064E3B;
+				secondary = 0xFFF8E7C9;
 			}
 			case Your_Color -> {
-				Theme.accent = yours.getValue();
-				Theme.secondary = 0xFFFFFFFF;
+				accent = yours.getPicked();
+				secondary = 0xFFFFFFFF;
 			}
 			case Ultra_Violet -> {
-				Theme.accent = 0xFF6A00F4;
-				Theme.secondary = 0xFFFFD6A5;
+				accent = 0xFF6A00F4;
+				secondary = 0xFFFFD6A5;
 			}
 			default -> {
-				Theme.accent = dlindustries.uk.daduncs.System.INSTANCE.getAccentManager().getAccent();
-				Theme.secondary = 0xFFFFFFFF;
+				accent = dlindustries.uk.daduncs.System.INSTANCE.getAccentManager().getAccent();
+				secondary = 0xFFFFFFFF;
 			}
 		}
+
+		MediaManager media = dlindustries.uk.daduncs.System.INSTANCE.getMediaManager();
+		if (syncCover.getValue()) media.start();
+
+		boolean covered = syncCover.getValue() && !media.getTrack().empty() && media.getHot() != 0;
+		Theme.target(covered ? Theme.lift(media.getHot()) : accent, covered ? Theme.lift(media.getCold()) : secondary, covered);
 	}
 
 	public ClickGUI() {
@@ -131,7 +147,7 @@ public final class ClickGUI extends Module {
 				GLFW.GLFW_KEY_RIGHT_SHIFT,
 				Category.CLIENT);
 
-		addSettings(ui, guiSize, openCloseSounds, uiSounds, theme, yours, sliderGradient, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
+		addSettings(ui, guiSize, openCloseSounds, uiSounds, theme, yours, sliderGradient, fade, fadeSize, fadeGradient, gradientSpeed, syncCover, modern, hudGlass, sidebarGlass, animatedIcons, randomisedTiming);
 	}
 
 	@Override

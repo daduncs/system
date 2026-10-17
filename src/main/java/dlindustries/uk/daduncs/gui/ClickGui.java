@@ -416,6 +416,13 @@ public final class ClickGui extends Screen {
 		float loose = alpha * (1f - merge);
 		float joined = alpha * merge;
 
+		if (ClickGUI.fade.getValue()) {
+			if (loose > 0.01f)
+				Render2D.drawFade(context, railDrawX, railDrawY, railW, railH, Theme.PANEL_ROUND, ClickGUI.fadeSize.getValueFloat(), ClickGUI.fadeGradient.getValue(), loose);
+
+			Render2D.drawFade(context, panelDrawX, panelDrawY, panelW, panelH, Theme.PANEL_ROUND, ClickGUI.fadeSize.getValueFloat(), ClickGUI.fadeGradient.getValue(), alpha);
+		}
+
 		if (loose > 0.01f)
 			Render2D.drawGlassRoundRect(context, railDrawX, railDrawY, railW, railH, Theme.PANEL_ROUND, Theme.SHEEN, Theme.BLUR * haze, Theme.surface, loose);
 

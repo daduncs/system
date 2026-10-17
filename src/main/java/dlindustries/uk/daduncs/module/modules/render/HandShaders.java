@@ -20,8 +20,10 @@
 
 package dlindustries.uk.daduncs.module.modules.render;
 
+import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
@@ -34,7 +36,9 @@ public final class HandShaders extends Module {
 		SOLID, FROSTED, FLUID
 	}
 
-	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF);
+	private final bool custom = new bool(EncryptedString.of("Custom Color"), false);
+	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF).setVisibility(custom::getValue);
+	private final bool gradient = new bool(EncryptedString.of("Gradient"), true).setVisibility(() -> !custom.getValue());
 	private final mode<Fill> fillMode = new mode<>(EncryptedString.of("Fill Mode"), Fill.SOLID, Fill.class);
 	private final number fill = new number(EncryptedString.of("Fill"), 0, 1, 0.35, 0.05);
 	private final number width = new number(EncryptedString.of("Width"), 1, 6, 3, 0.5);
@@ -47,12 +51,13 @@ public final class HandShaders extends Module {
 				EncryptedString.of("pretty self explanatory"),
 				-1,
 				Category.RENDER);
-		addSettings(color, fillMode, fill, width, glow);
+		addSettings(custom, color, gradient, fillMode, fill, width, glow);
 	}
 
 	public void composite() {
 		renderer.beginFrame();
-		renderer.addDepth(color.getValue());
-		renderer.composite(width.getValueFloat(), glow.getValueFloat(), fill.getValueFloat(), fillMode.getModeIndex());
+		renderer.addDepth(custom.getValue() ? color.getValue() : Theme.accent);
+		renderer.composite(width.getValueFloat(), glow.getValueFloat(), fill.getValueFloat(), fillMode.getModeIndex(),
+				gradient.getValue() && !custom.getValue(), Theme.accent, Theme.flowEnd());
 	}
 }

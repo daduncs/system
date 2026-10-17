@@ -55,6 +55,9 @@ public final class EffectsHud extends Module implements HudListener {
 
 	private final bool outline = new bool(EncryptedString.of("Outline"), false);
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
+	private final bool fading = new bool(EncryptedString.of("Fade"), false);
+	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
+	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
 
 	private final Anim show = new Anim(0f, 7f);
 	private final Map<RegistryEntry<StatusEffect>, Anim> rows = new HashMap<>();
@@ -66,7 +69,7 @@ public final class EffectsHud extends Module implements HudListener {
 				EncryptedString.of("Shows what potions you have"),
 				-1,
 				Category.RENDER);
-		addSettings(hideAmbient, outline, size);
+		addSettings(hideAmbient, outline, size, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 	}
 
@@ -123,6 +126,9 @@ public final class EffectsHud extends Module implements HudListener {
 
 		HudEditor.push(context, size.getValueFloat() / 100f, x, y);
 		HudEditor.bounds(this, x, y, width, height);
+
+		if (fading.getValue())
+			Render2D.drawFade(context, x, y, width, height, 12, fadeSize.getValueFloat(), fadeGradient.getValue(), fade);
 
 		if (ClickGUI.hudGlass.getValue())
 			Render2D.drawBubble(context, x, y, width, height, 12, Theme.SHEEN, 7f, 0.35f, 0x66101010, fade);

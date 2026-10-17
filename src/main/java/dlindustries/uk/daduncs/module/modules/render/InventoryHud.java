@@ -41,13 +41,16 @@ public final class InventoryHud extends Module implements HudListener {
 				EncryptedString.of("Shows what you have in your inventory"),
 				-1,
 				Category.RENDER);
-		addSettings(outline, counts, size);
+		addSettings(outline, counts, size, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 	}
 
 	private final bool outline = new bool(EncryptedString.of("Outline"), false);
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
 	private final bool counts = new bool(EncryptedString.of("Counts"), true);
+	private final bool fading = new bool(EncryptedString.of("Fade"), false);
+	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
+	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
 
 	private static final Identifier EMPTY = Identifier.of("system", "textures/gui/x.png");
 	private static final int BUBBLE = 20;
@@ -103,6 +106,9 @@ public final class InventoryHud extends Module implements HudListener {
 	}
 
 	private void bubble(DrawContext context, int x, int y) {
+		if (fading.getValue())
+			Render2D.drawFade(context, x, y, BUBBLE, BUBBLE, ROUND, fadeSize.getValueFloat(), fadeGradient.getValue(), 1f);
+
 		if (ClickGUI.hudGlass.getValue()) {
 			Render2D.drawBubble(context, x, y, BUBBLE, BUBBLE, ROUND, Theme.SHEEN, 7f, 0.35f, 0x66101010, 1f);
 		} else {

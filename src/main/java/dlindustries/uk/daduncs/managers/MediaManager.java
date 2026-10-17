@@ -51,6 +51,7 @@ public final class MediaManager {
 	private static final String SPLIT = "|||";
 
 	private static final String PROBE = """
+			[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 			$out = ''
 			try {
 			    [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
@@ -85,6 +86,39 @@ public final class MediaManager {
 			if ($out) { Write-Output $out }
 			""".replace("PH", SPLIT);
 
+	private static final String COVER = """
+			[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+			$done = ''
+			try {
+			    [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
+			    [Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
+			    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+			    $wait = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+			    $kind = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]
+			    $hub = $wait.MakeGenericMethod($kind).Invoke($null, @([object]$kind::RequestAsync())).Result
+			    $live = $null
+			    foreach ($one in $hub.GetSessions()) {
+			        try { if ($one.GetPlaybackInfo().PlaybackStatus -eq 'Playing') { $live = $one; break } } catch {}
+			    }
+			    if (-not $live) { $live = $hub.GetCurrentSession() }
+			    if ($live) {
+			        $shape = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]
+			        $tags = $wait.MakeGenericMethod($shape).Invoke($null, @([object]$live.TryGetMediaPropertiesAsync())).Result
+			        if ($tags.Thumbnail) {
+			            $kind = [Windows.Storage.Streams.IRandomAccessStreamWithContentType]
+			            $stream = $wait.MakeGenericMethod($kind).Invoke($null, @([object]$tags.Thumbnail.OpenReadAsync())).Result
+			            $read = [System.IO.WindowsRuntimeStreamExtensions].GetMethod('AsStreamForRead', [Type[]]@([Windows.Storage.Streams.IInputStream])).Invoke($null, @($stream))
+			            $file = [System.IO.File]::Create($args[0])
+			            $read.CopyTo($file)
+			            $file.Close()
+			            $read.Close()
+			            $done = $tags.Artist + 'PH' + $tags.Title
+			        }
+			    }
+			} catch {}
+			if ($done) { Write-Output $done }
+			""".replace("PH", SPLIT);
+
 	private final ScheduledExecutorService clock = Executors.newSingleThreadScheduledExecutor(job -> {
 		Thread thread = new Thread(job, "media");
 		thread.setDaemon(true);
@@ -102,6 +136,7 @@ public final class MediaManager {
 	private volatile long stamp;
 
 	private Path script;
+	private Path coverScript;
 	private boolean started;
 
 	public record Track(String artist, String title, int position, int duration, boolean playing) {
@@ -163,10 +198,7 @@ public final class MediaManager {
 				script.toFile().deleteOnExit();
 			}
 
-			String root = java.lang.System.getenv("SystemRoot");
-			String shell = (root == null ? "C:\\Windows" : root) + "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
-
-			ProcessBuilder builder = new ProcessBuilder(shell, "-NoProfile", "-NonInteractive",
+			ProcessBuilder builder = new ProcessBuilder(shell(), "-NoProfile", "-NonInteractive",
 					"-ExecutionPolicy", "Bypass", "-File", script.toString());
 			builder.redirectErrorStream(false);
 
@@ -218,7 +250,20 @@ public final class MediaManager {
 		triedAt = java.lang.System.currentTimeMillis();
 
 		Thread hunt = new Thread(() -> {
-			byte[] bytes = art("artist:\"" + now.artist() + "\" track:\"" + now.title() + "\"");
+			byte[] bytes = thumbnail(now);
+
+			for (int i = 0; i < 2 && bytes == null; i++) {
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException ignored) {
+					return;
+				}
+
+				bytes = thumbnail(now);
+			}
+
+			if (bytes == null)
+				bytes = art("artist:\"" + now.artist() + "\" track:\"" + now.title() + "\"");
 
 			if (bytes == null)
 				bytes = art(now.artist() + " " + now.title());
@@ -239,6 +284,46 @@ public final class MediaManager {
 
 		hunt.setDaemon(true);
 		hunt.start();
+	}
+
+	private byte[] thumbnail(Track now) {
+		try {
+			if (coverScript == null || !Files.exists(coverScript)) {
+				coverScript = Files.createTempFile("system_cover_", ".ps1");
+				Files.writeString(coverScript, COVER, StandardCharsets.UTF_8);
+				coverScript.toFile().deleteOnExit();
+			}
+
+			Path image = Files.createTempFile("system_cover_", ".img");
+			Process process = new ProcessBuilder(shell(), "-NoProfile", "-NonInteractive",
+					"-ExecutionPolicy", "Bypass", "-File", coverScript.toString(), image.toString()).start();
+
+			String line;
+			try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+				line = reader.readLine();
+			}
+
+			process.waitFor(4, TimeUnit.SECONDS);
+
+			byte[] bytes = Files.readAllBytes(image);
+			Files.deleteIfExists(image);
+
+			if (line == null)
+				return null;
+
+			String[] parts = line.split("\\|\\|\\|", -1);
+			if (parts.length < 2 || !parts[0].trim().equals(now.artist()) || !parts[1].trim().equals(now.title()))
+				return null;
+
+			return bytes.length > 0 ? bytes : null;
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static String shell() {
+		String root = java.lang.System.getenv("SystemRoot");
+		return (root == null ? "C:\\Windows" : root) + "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 	}
 
 	private static byte[] art(String term) {

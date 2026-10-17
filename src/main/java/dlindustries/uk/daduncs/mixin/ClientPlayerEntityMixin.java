@@ -52,7 +52,7 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 	@Unique
 	private float sr$my, sr$mp, sr$mly, sr$mlp;
 	@Unique
-	private float sr$ry, sr$lry, sr$rp, sr$lrp;
+	private float sr$ry, sr$rp;
 	@Unique
 	private float sr$by, sr$hy, sr$lby, sr$lhy;
 
@@ -73,9 +73,7 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 		this.sr$mly = p.lastYaw;
 		this.sr$mlp = p.lastPitch;
 		this.sr$ry = p.renderYaw;
-		this.sr$lry = p.lastRenderYaw;
 		this.sr$rp = p.renderPitch;
-		this.sr$lrp = p.lastRenderPitch;
 		this.sr$by = p.bodyYaw;
 		this.sr$hy = p.headYaw;
 		this.sr$lby = p.lastBodyYaw;
@@ -101,10 +99,10 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 		p.setPitch(this.sr$mp);
 		p.lastYaw = this.sr$mly;
 		p.lastPitch = this.sr$mlp;
-		p.renderYaw = this.sr$ry;
-		p.lastRenderYaw = this.sr$lry;
-		p.renderPitch = this.sr$rp;
-		p.lastRenderPitch = this.sr$lrp;
+		p.lastRenderYaw = this.sr$ry;
+		p.lastRenderPitch = this.sr$rp;
+		p.renderYaw = this.sr$ry + (this.sr$my - this.sr$ry) * 0.5f;
+		p.renderPitch = this.sr$rp + (this.sr$mp - this.sr$rp) * 0.5f;
 		p.bodyYaw = this.sr$by;
 		p.headYaw = this.sr$hy;
 		p.lastBodyYaw = this.sr$lby;

@@ -44,7 +44,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-public final class AutoDoubleHand extends Module implements TickListener {
+public final class 	AutoDoubleHand extends Module implements TickListener {
 	public enum AnchorMode {
 		ALWAYS("Always"),
 		CRITICAL("Critical");

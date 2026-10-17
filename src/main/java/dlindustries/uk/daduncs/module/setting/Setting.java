@@ -20,6 +20,9 @@
 
 package dlindustries.uk.daduncs.module.setting;
 
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+
 import java.util.function.BooleanSupplier;
 
 public abstract class Setting<T extends Setting<T>> {
@@ -69,6 +72,36 @@ public abstract class Setting<T extends Setting<T>> {
 	}
 
 	private BooleanSupplier visibility = () -> true;
+	private boolean compact;
+	private boolean divider;
+	private ItemStack icon;
+
+	public ItemStack getIcon() {
+		return icon;
+	}
+
+	public T setIcon(Item item) {
+		this.icon = new ItemStack(item);
+		return (T) this;
+	}
+
+	public boolean hasDivider() {
+		return divider;
+	}
+
+	public T setDivider(boolean divider) {
+		this.divider = divider;
+		return (T) this;
+	}
+
+	public boolean isCompact() {
+		return compact;
+	}
+
+	public T setCompact(boolean compact) {
+		this.compact = compact;
+		return (T) this;
+	}
 
 	public boolean isVisible() {
 		return visibility.getAsBoolean();

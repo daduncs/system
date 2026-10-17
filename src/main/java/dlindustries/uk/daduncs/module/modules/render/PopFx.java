@@ -2,6 +2,7 @@ package dlindustries.uk.daduncs.module.modules.render;
 
 import dlindustries.uk.daduncs.event.events.GameRenderListener;
 import dlindustries.uk.daduncs.event.events.PacketReceiveListener;
+import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
@@ -37,7 +38,9 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 	private static final float DRIFT = 0.3f;
 	private static final float SCALE = 1.2f;
 
-	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF);
+	private final bool custom = new bool(EncryptedString.of("Custom Color"), false);
+	private final colour color = new colour(EncryptedString.of("Color"), 0xFF9B6DFF).setVisibility(custom::getValue);
+	private final bool gradient = new bool(EncryptedString.of("Gradient"), true).setVisibility(() -> !custom.getValue());
 	private final mode<Fill> fillMode = new mode<>(EncryptedString.of("Fill Mode"), Fill.SOLID, Fill.class);
 	private final number fill = new number(EncryptedString.of("Fill"), 0, 1, 0.3, 0.05);
 	private final number width = new number(EncryptedString.of("Width"), 1, 6, 6, 0.5);
@@ -47,7 +50,7 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 	private final bool particles = new bool(EncryptedString.of("Particles"), true);
 	private final number particleCount = new number(EncryptedString.of("Particle Count"), 4, 60, 20, 1).setVisibility(particles::getValue);
 	private final number particleLifetime = new number(EncryptedString.of("Particle Lifetime"), 0.5, 6, 2, 0.1).setVisibility(particles::getValue);
-	private final colour particleColor = new colour(EncryptedString.of("Particle Color"), 0xFF9B6DFF).setVisibility(particles::getValue);
+	private final colour particleColor = new colour(EncryptedString.of("Particle Color"), 0xFF9B6DFF).setVisibility(() -> particles.getValue() && custom.getValue());
 
 	private final OutlineRenderer renderer = new OutlineRenderer();
 	private final ItemRenderState totem = new ItemRenderState();
@@ -63,7 +66,7 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 				EncryptedString.of("self explanatory."),
 				-1,
 				Category.RENDER);
-		addSettings(color, fillMode, fill, width, glow, lifetime, size, particles, particleCount, particleLifetime, particleColor);
+		addSettings(custom, color, gradient, fillMode, fill, width, glow, lifetime, size, particles, particleCount, particleLifetime, particleColor);
 	}
 
 	@Override
@@ -117,7 +120,7 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 		event.matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
 		event.matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(camera.getYaw() + 180f));
 
-		bloom.draw(event.matrices, camera, 0.95f, particleColor.getValue());
+		bloom.draw(event.matrices, camera, 0.95f, start(particleColor), end(particleColor));
 
 		event.matrices.pop();
 	}
@@ -144,7 +147,7 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 			float scale = grow(t) * size.getValueFloat() * SCALE;
 
 			Vec3d spot = pop.spot().add(pop.drift().multiply(lift)).add(0, lift * RISE, 0);
-			renderer.addItem(totem, world, spot, facing + spin, scale, color.getValue());
+			renderer.addItem(totem, world, spot, facing + spin, scale, start(color));
 		}
 
 		renderer.drawShapes();
@@ -153,7 +156,18 @@ public final class PopFx extends Module implements PacketReceiveListener, GameRe
 	public void composite() {
 		if (!active) return;
 
-		renderer.composite(width.getValueFloat(), glow.getValueFloat(), fill.getValueFloat(), fillMode.getModeIndex());
+		renderer.composite(width.getValueFloat(), glow.getValueFloat(), fill.getValueFloat(), fillMode.getModeIndex(),
+				gradient.getValue() && !custom.getValue(), Theme.accent, Theme.flowEnd());
+	}
+
+	private int start(colour picked) {
+		return custom.getValue() ? picked.getValue() : Theme.accent;
+	}
+
+	private int end(colour picked) {
+		if (custom.getValue()) return picked.getValue();
+
+		return gradient.getValue() ? Theme.flowEnd() : Theme.accent;
 	}
 
 	private static float easeOut(float t) {

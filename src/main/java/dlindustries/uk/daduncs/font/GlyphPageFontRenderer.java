@@ -52,6 +52,10 @@ public final class GlyphPageFontRenderer {
 		return regularGlyphPage;
 	}
 
+	public void destroy() {
+		regularGlyphPage.destroy();
+	}
+
 	public GlyphPageFontRenderer(GlyphPage regularGlyphPage, GlyphPage boldGlyphPage, GlyphPage italicGlyphPage,
 								 GlyphPage boldItalicGlyphPage) {
 		this.regularGlyphPage = regularGlyphPage;
@@ -129,6 +133,10 @@ public final class GlyphPageFontRenderer {
 			chars[i] = (char) i;
 		}
 
+		return createFor(id, size, style, chars);
+	}
+
+	public static GlyphPageFontRenderer createFor(CharSequence id, int size, int style, char[] chars) {
 		Font font = null;
 
 		try {

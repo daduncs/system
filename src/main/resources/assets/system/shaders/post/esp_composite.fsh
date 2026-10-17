@@ -10,6 +10,8 @@ uniform sampler2D BlurSampler;
 layout(std140) uniform EspStyle {
     vec4 Style;
     vec4 Look;
+    vec4 From;
+    vec4 To;
 };
 
 in vec2 texCoord;
@@ -44,6 +46,11 @@ void main() {
 
     vec2 seed = decodeSeed(seedTexel);
     vec3 color = texelFetch(SilhouetteSampler, ivec2(seed), 0).rgb;
+
+    if (Look.y > 0.5) {
+        float wave = fract((gl_FragCoord.x + gl_FragCoord.y) * 0.0012 - time * 0.12);
+        color = mix(From.rgb, To.rgb, wave < 0.5 ? wave * 2.0 : (1.0 - wave) * 2.0);
+    }
 
     if (texelFetch(SilhouetteSampler, pixel, 0).a > 0.0) {
         float edge = clamp(max(openness(pixel, 1.5), openness(pixel, 3.5) * 0.5) * 2.0, 0.0, 1.0);

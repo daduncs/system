@@ -33,6 +33,7 @@ import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.Sounds;
 import dlindustries.uk.daduncs.utils.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 public final class Row {
@@ -92,9 +93,17 @@ public final class Row {
 	private int trackLeft;
 	private int room;
 
+	private int labelWidth() {
+		return nameWidth() + (setting.getIcon() != null ? 19 : 0);
+	}
+
+	private int nameWidth() {
+		return setting.isCompact() ? TextRenderer.tinyWidth(setting.getName()) : TextRenderer.lightWidth(setting.getName());
+	}
+
 	public void render(DrawContext context, int x, int y, int right, int mouseX, int mouseY, float delta, float alpha) {
 		this.alpha = alpha;
-		this.room = x + TextRenderer.lightWidth(setting.getName()) + 8;
+		this.room = x + labelWidth() + 8;
 		this.hovered = mouseX >= x && mouseX <= right && mouseY >= y && mouseY <= y + HEIGHT;
 		knob.update(delta);
 		knobMax.update(delta);
@@ -105,11 +114,24 @@ public final class Row {
 		flip.update(delta);
 		dot.update(delta);
 
-		TextRenderer.drawLight(setting.getName(), context, x, y + 9, Theme.fade(Theme.text, alpha));
+		if (setting.hasDivider())
+			Render2D.drawRoundRect(context, x, y, right - x, 1, 0.5f, Theme.fade(Theme.divider, alpha));
+
+		if (setting.getIcon() != null) {
+			Matrix3x2fStack matrices = context.getMatrices();
+			matrices.pushMatrix();
+			matrices.translate(x + nameWidth() + 5, y + HEIGHT / 2f - 7f);
+			matrices.scale(0.875f, 0.875f);
+			context.drawItem(setting.getIcon(), 0, 0);
+			matrices.popMatrix();
+		}
+
+		if (setting.isCompact()) TextRenderer.drawTiny(setting.getName(), context, x, y + 11, Theme.fade(Theme.text, alpha));
+		else TextRenderer.drawLight(setting.getName(), context, x, y + 9, Theme.fade(Theme.text, alpha));
 
 		if (setting.getTag() != null) {
 			int badge = TextRenderer.tinyWidth(setting.getTag()) + 10;
-			int badgeX = x + TextRenderer.lightWidth(setting.getName()) + 6;
+			int badgeX = x + labelWidth() + 6;
 			boolean tagHovered = mouseX >= badgeX && mouseX <= badgeX + badge && mouseY >= y + HEIGHT / 2f - 6.5f && mouseY <= y + HEIGHT / 2f + 6.5f;
 
 			float bgAlpha = tagHovered ? 0.38f : 0.22f;

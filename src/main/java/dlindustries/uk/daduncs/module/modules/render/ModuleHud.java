@@ -60,6 +60,9 @@ public final class ModuleHud extends Module implements HudListener {
 	private final bool outline = new bool(EncryptedString.of("Outline"), false);
 	private final number thickness = new number(EncryptedString.of("Outline Thickness"), 1, 5, 1, 1).setVisibility(outline::getValue);
 	private final bool outlineGradient = new bool(EncryptedString.of("Outline Gradient"), true).setVisibility(outline::getValue);
+	private final bool glow = new bool(EncryptedString.of("Glow"), false);
+	private final number glowSize = new number(EncryptedString.of("Glow Size"), 4, 60, 30, 1).setVisibility(glow::getValue);
+	private final bool glowGradient = new bool(EncryptedString.of("Glow Gradient"), true).setVisibility(glow::getValue);
 	private final number padding = new number(EncryptedString.of("Padding Y"), 0, 10, 4, 1);
 	private final number paddingX = new number(EncryptedString.of("Padding X"), 0, 10, 4, 1);
 	private final number speed = new number(EncryptedString.of("Speed"), 1, 20, 9, 1);
@@ -75,7 +78,7 @@ public final class ModuleHud extends Module implements HudListener {
 				EncryptedString.of("Lists what you have on"),
 				-1,
 				Category.RENDER);
-		addSettings(font, gradient, outline, thickness, outlineGradient, padding, paddingX, speed, size);
+		addSettings(font, gradient, outline, thickness, outlineGradient, glow, glowSize, glowGradient, padding, paddingX, speed, size);
 		HudEditor.register(this);
 	}
 
@@ -171,6 +174,24 @@ public final class ModuleHud extends Module implements HudListener {
 			matrices.translate(-axis, 0f);
 		}
 
+		if (glow.getValue()) {
+			float margin = glowSize.getValueFloat() * 1.5f;
+			float left = base - margin;
+			float wide = widest + margin * 2f;
+			float high = offset - top + margin * 2f;
+
+			for (float[] slot : shape) {
+				float x0 = (slot[0] - margin - left) / wide;
+				float x1 = (slot[0] + slot[2] + margin - left) / wide;
+				float y0 = (slot[1] - top) / high;
+				float y1 = (slot[1] + slot[4] - top + margin * 2f) / high;
+
+				Render2D.drawFade(context, slot[0], slot[1], slot[2], slot[4], 0f, glowSize.getValueFloat(),
+						Theme.fade(tint(x0, y0), slot[3]), Theme.fade(tint(x0, y1), slot[3]),
+						Theme.fade(tint(x1, y1), slot[3]), Theme.fade(tint(x1, y0), slot[3]), 120f);
+			}
+		}
+
 		for (int i = 0; i < runs.size(); i++) {
 			float[] run = runs.get(i);
 			float above = i > 0 ? runs.get(i - 1)[2] : 0f;
@@ -250,10 +271,14 @@ public final class ModuleHud extends Module implements HudListener {
 		face.drawString(context, module.getName(), x - face.getInkLeft(module.getName()), y - 4 + (Fonts.SMALL.getFontHeight() - face.getFontHeight()) / 2f, color);
 	}
 
+	private int tint(float across, float down) {
+		return glowGradient.getValue() ? shade(across * 0.6f + down * 0.4f) : Theme.accent;
+	}
+
 	private int shade(float span) {
 		float wave = (span * 0.7f + drift) % 1f;
 
-		return Theme.lerp(Theme.accent, Theme.text, wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
+		return Theme.lerp(Theme.accent, Theme.flowEnd(), wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
 	}
 
 	private static boolean allign(float[] run, float[] row) {

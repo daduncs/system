@@ -23,6 +23,8 @@ package dlindustries.uk.daduncs.module.modules.render;
 import dlindustries.uk.daduncs.System;
 import dlindustries.uk.daduncs.event.events.GameRenderListener;
 import dlindustries.uk.daduncs.font.Fonts;
+import dlindustries.uk.daduncs.font.GlyphPageFontRenderer;
+import dlindustries.uk.daduncs.font.ScriptFonts;
 import dlindustries.uk.daduncs.font.WorldFont;
 import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.managers.LyricsManager;
@@ -37,6 +39,7 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 
+import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -174,7 +177,8 @@ public final class WorldLyrics extends Module implements GameRenderListener {
 			long age = now - word.born();
 			float born = Math.min(1f, age / 300f);
 			float gone = Math.max(0f, (age / (float) life - 0.6f) / 0.4f);
-			float width = modern ? WorldFont.width(Fonts.BOLD, word.text()) : WorldFont.vanillaWidth(word.text());
+			GlyphPageFontRenderer font = face(word.text());
+			float width = modern ? WorldFont.width(font, word.text()) : WorldFont.vanillaWidth(word.text());
 
 			event.matrices.push();
 			event.matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
@@ -185,11 +189,16 @@ public final class WorldLyrics extends Module implements GameRenderListener {
 			event.matrices.scale(scale, modern ? scale : -scale, scale);
 			event.matrices.translate(-width / 2f, 0f, 0f);
 
-			if (modern) WorldFont.draw(Fonts.BOLD, event.matrices, word.text(), hot, cold, phase, gone, born, GLOW);
+			if (modern) WorldFont.draw(font, event.matrices, word.text(), hot, cold, phase, gone, born, GLOW);
 			else WorldFont.vanilla(event.matrices, word.text(), Theme.fade(hot, 1f - gone));
 
 			event.matrices.pop();
 		}
+	}
+
+	private static GlyphPageFontRenderer face(String text) {
+		GlyphPageFontRenderer script = ScriptFonts.of(text, 40, Font.BOLD);
+		return script == null ? Fonts.BOLD : script;
 	}
 
 	private record Word(String text, Vec3d spot, float tilt, long born) {

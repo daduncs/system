@@ -237,7 +237,7 @@ public final class ProfileManager {
 				} else if (setting instanceof mode<?> modeSetting) {
 					moduleConfig.addProperty(settingName, modeSetting.getModeIndex());
 				} else if (setting instanceof colour colourSetting) {
-					moduleConfig.addProperty(settingName, colourSetting.getValue());
+					moduleConfig.addProperty(settingName, colourSetting.getPicked());
 				} else if (setting instanceof number numberSetting) {
 					moduleConfig.addProperty(settingName, numberSetting.getValue());
 				} else if (setting instanceof bind keybindSetting) {

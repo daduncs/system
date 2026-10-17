@@ -54,7 +54,7 @@ import java.util.OptionalInt;
 
 public final class OutlineRenderer {
 
-	private static final int STYLE_SIZE = new Std140SizeCalculator().putVec4().putVec4().get();
+	private static final int STYLE_SIZE = new Std140SizeCalculator().putVec4().putVec4().putVec4().putVec4().get();
 	private static final int MASK_SIZE = new Std140SizeCalculator().putVec4().get();
 	private final MinecraftClient mc = MinecraftClient.getInstance();
 	private final SilhouetteQueue queue = new SilhouetteQueue();
@@ -171,6 +171,10 @@ public final class OutlineRenderer {
 	}
 
 	public void composite(float width, float glow, float fill, int look) {
+		composite(width, glow, fill, look, false, 0, 0);
+	}
+
+	public void composite(float width, float glow, float fill, int look, boolean gradient, int from, int to) {
 		if (!drawn) return;
 
 		GpuSampler nearest = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
@@ -202,7 +206,9 @@ public final class OutlineRenderer {
 			float time = (Util.getMeasuringTimeMs() % 100_000L) / 1000.0f;
 			Std140Builder.intoBuffer(view.data())
 					.putVec4(width, glow, fill, time)
-					.putVec4(look, 0, 0, 0);
+					.putVec4(look, gradient ? 1 : 0, 0, 0)
+					.putVec4(ColorHelper.getRedFloat(from), ColorHelper.getGreenFloat(from), ColorHelper.getBlueFloat(from), 1)
+					.putVec4(ColorHelper.getRedFloat(to), ColorHelper.getGreenFloat(to), ColorHelper.getBlueFloat(to), 1);
 		}
 
 		Framebuffer main = mc.getFramebuffer();

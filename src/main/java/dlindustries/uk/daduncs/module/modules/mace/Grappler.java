@@ -243,6 +243,10 @@ public final class Grappler extends Module implements TickListener, HudListener 
 		}
 	}
 
+	public boolean isThrowing() {
+		return stage != 0 || holdSilentTicks >= 0;
+	}
+
 	private void startCatchSequence() {
 		if (!hasHotbarItems()) {
 			return;

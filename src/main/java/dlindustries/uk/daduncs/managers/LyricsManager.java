@@ -57,8 +57,9 @@ public final class LyricsManager {
 
 		String artist = track.artist();
 		String title = track.title();
+		int length = track.duration();
 
-		Thread thread = new Thread(() -> hunt(artist, title), "lyrics");
+		Thread thread = new Thread(() -> hunt(artist, title, length), "lyrics");
 		thread.setDaemon(true);
 		thread.start();
 	}
@@ -103,13 +104,13 @@ public final class LyricsManager {
 		return Math.max(0f, Math.min(1f, (position - found.time()) / (float) (end - found.time())));
 	}
 
-	private void hunt(String artist, String title) {
+	private void hunt(String artist, String title, int length) {
 		String plain = strip(title);
 
 		if (get(artist, plain)) return;
 		if (!plain.equals(title) && get(artist, title)) return;
 
-		search(artist + " " + plain);
+		search(artist + " " + plain, artist, plain, length);
 	}
 
 	private boolean get(String artist, String title) {
@@ -124,7 +125,7 @@ public final class LyricsManager {
 		}
 	}
 
-	private void search(String term) {
+	private void search(String term, String artist, String title, int length) {
 		try {
 			HttpResponse<String> response = send(SEARCH + encode(term));
 
@@ -133,10 +134,28 @@ public final class LyricsManager {
 			JsonArray found = JsonParser.parseString(response.body()).getAsJsonArray();
 
 			for (int i = 0; i < found.size() && i < PICKS; i++) {
-				if (read(found.get(i).getAsJsonObject())) return;
+				JsonObject song = found.get(i).getAsJsonObject();
+
+				if (same(song, artist, title, length) && read(song)) return;
 			}
 		} catch (Exception ignored) {
 		}
+	}
+
+	private static boolean same(JsonObject song, String artist, String title, int length) {
+		boolean named = song.has("trackName") && close(song.get("trackName").getAsString(), title);
+		boolean sung = song.has("artistName") && close(song.get("artistName").getAsString(), artist);
+		boolean timed = length > 0 && song.has("duration") && !song.get("duration").isJsonNull()
+				&& Math.abs(song.get("duration").getAsDouble() * 1000 - length) <= 4000;
+
+		return named && (sung || timed);
+	}
+
+	private static boolean close(String found, String wanted) {
+		String one = found.toLowerCase().trim();
+		String two = wanted.toLowerCase().trim();
+
+		return !one.isEmpty() && !two.isEmpty() && (one.contains(two) || two.contains(one));
 	}
 
 	private boolean read(JsonObject song) {

@@ -60,6 +60,7 @@ public final class ModuleManager implements ButtonListener {
 		add(new AutoCrystal());
 		add(new AutoDoubleHand());
 		add(new AutoInventoryTotem());
+		add(new DHand());
 		add(new DoubleAnchor());
 		add(new DtapSetup());
 		add(new HoverTotem());
@@ -110,6 +111,7 @@ public final class ModuleManager implements ButtonListener {
 		add(new ElytraSwapV2());
 
 		add(new AutoCart());
+		add(new AutoCartV2());
 		add(new CrossbowCart());
 		add(new InvCart());
 

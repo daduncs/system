@@ -8,6 +8,7 @@ import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.mixin.PlayerInteractEntityC2SPacketAccessor;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.colour;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
@@ -45,7 +46,9 @@ public final class HitFx extends Module implements PacketSendListener, GameRende
 	private final number count = new number(EncryptedString.of("Particle Count"), 4, 60, 14, 1).setVisibility(this::particles);
 	private final mode<Speed> speed = new mode<>(EncryptedString.of("Particle Mode"), Speed.Fast, Speed.class).setVisibility(this::particles);
 	private final number lifetime = new number(EncryptedString.of("Particle Lifetime"), 0.5, 6, 3, 0.1).setVisibility(this::particles);
-	private final colour particleColor = new colour(EncryptedString.of("Particle Color"), 0xFF9B6DFF).setVisibility(this::particles);
+	private final bool custom = new bool(EncryptedString.of("Custom Color"), false).setVisibility(this::particles);
+	private final colour particleColor = new colour(EncryptedString.of("Particle Color"), 0xFF9B6DFF).setVisibility(() -> particles() && custom.getValue());
+	private final bool gradient = new bool(EncryptedString.of("Gradient"), true).setVisibility(() -> particles() && !custom.getValue());
 	private final number textSize = new number(EncryptedString.of("Text Size"), 0.15, 1.5, 0.45, 0.05).setVisibility(this::hero);
 	private final number textLifetime = new number(EncryptedString.of("Text Lifetime"), 0.3, 3, 1, 0.1).setVisibility(this::hero);
 
@@ -58,7 +61,7 @@ public final class HitFx extends Module implements PacketSendListener, GameRende
 				EncryptedString.of("Shows effects when u hit someone"),
 				-1,
 				Category.RENDER);
-		addSettings(mode, count, speed, lifetime, particleColor, textSize, textLifetime);
+		addSettings(mode, count, speed, lifetime, custom, particleColor, gradient, textSize, textLifetime);
 	}
 
 	@Override
@@ -143,7 +146,10 @@ public final class HitFx extends Module implements PacketSendListener, GameRende
 		event.matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
 		event.matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(camera.getYaw() + 180f));
 
-		bloom.draw(event.matrices, camera, speed.isMode(Speed.Slow) ? 0.1f : 0.95f, particleColor.getValue());
+		int start = custom.getValue() ? particleColor.getValue() : Theme.accent;
+		int end = custom.getValue() ? start : gradient.getValue() ? Theme.flowEnd() : Theme.accent;
+
+		bloom.draw(event.matrices, camera, speed.isMode(Speed.Slow) ? 0.1f : 0.95f, start, end);
 		drawPops(event.matrices, camera, now);
 
 		event.matrices.pop();

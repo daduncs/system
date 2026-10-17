@@ -6,7 +6,9 @@ import dlindustries.uk.daduncs.event.events.PacketReceiveListener;
 import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.setting.bool;
+import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.EncryptedString;
@@ -31,15 +33,23 @@ import java.util.Map;
 
 public final class Nametags extends Module implements HudListener, PacketReceiveListener {
 
+	public enum Mode {
+		Default, Gay, Vanilla
+	}
+
 	private static final EquipmentSlot[] ARMOR = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 	private static final int HEIGHT = 14;
 	private static final int PAD = 4;
 	private static final int GAP = 4;
 	private static final int ICON = 10;
+	private static final float ROUND = 5f;
 
+	private final mode<Mode> mode = new mode<>(EncryptedString.of("Mode"), Mode.Default, Mode.class);
 	private final bool health = new bool(EncryptedString.of("Health"), true);
 	private final bool pops = new bool(EncryptedString.of("Totem Pops"), true);
 	private final bool armor = new bool(EncryptedString.of("Armor"), true);
+	private final bool held = new bool(EncryptedString.of("Held Items"), true);
+	private final bool outline = new bool(EncryptedString.of("Outline"), true).setVisibility(() -> !mode.isMode(Mode.Vanilla));
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
 
 	private final Map<Integer, Integer> popped = new HashMap<>();
@@ -52,7 +62,7 @@ public final class Nametags extends Module implements HudListener, PacketReceive
 				EncryptedString.of("self explanatory."),
 				-1,
 				Category.RENDER);
-		addSettings(health, pops, armor, size);
+		addSettings(mode, outline, health, pops, armor, held, size);
 	}
 
 	@Override
@@ -118,15 +128,18 @@ public final class Nametags extends Module implements HudListener, PacketReceive
 	}
 
 	private void draw(DrawContext context, PlayerEntity player, float x, float y) {
+		boolean vanilla = mode.isMode(Mode.Vanilla);
 		String name = player.getName().getString();
 		String hp = String.valueOf(Math.round(player.getHealth() + player.getAbsorptionAmount()));
 		int count = popped.getOrDefault(player.getId(), 0);
 		String popText = String.valueOf(count);
 		boolean showPops = pops.getValue() && count > 0;
 
-		int width = PAD + TextRenderer.smallBoldWidth(name) + PAD;
-		if (health.getValue()) width += TextRenderer.smallWidth(hp) + GAP;
-		if (showPops) width += GAP + ICON + 1 + TextRenderer.smallWidth(popText);
+		int pad = vanilla ? 2 : PAD;
+		int height = vanilla ? 11 : HEIGHT;
+		int width = pad + width(name, true) + pad;
+		if (health.getValue()) width += width(hp, false) + GAP;
+		if (showPops) width += GAP + ICON + 1 + width(popText, false);
 
 		Matrix3x2fStack matrices = context.getMatrices();
 		matrices.pushMatrix();
@@ -134,37 +147,68 @@ public final class Nametags extends Module implements HudListener, PacketReceive
 		matrices.scale(size.getValueFloat() / 100f, size.getValueFloat() / 100f);
 
 		int left = -width / 2;
-		int top = -HEIGHT;
-		int middle = top + HEIGHT / 2 - 1;
+		int top = -height;
+		int middle = top + height / 2 - 1;
 
-		Render2D.drawBlurRoundRect(context, left, top, width, HEIGHT, 0f, 1f, Theme.BLUR, Theme.surface, 1f);
-		Render2D.drawRoundOutline(context, left, top, width, HEIGHT, 0f, 1f, Theme.accent);
+		background(context, left, top, width, height);
 
-		int cursor = left + PAD;
+		int cursor = left + pad;
 
 		matrices.pushMatrix();
-		matrices.translate(0f, -0.5f);
+		if (!vanilla) matrices.translate(0f, -0.5f);
 
 		if (health.getValue()) {
-			TextRenderer.drawSmall(hp, context, cursor, middle, Theme.accent);
-			cursor += TextRenderer.smallWidth(hp) + GAP;
+			text(context, hp, cursor, middle, vanilla ? 0xFF55FF55 : Theme.accent, false);
+			cursor += width(hp, false) + GAP;
 		}
 
-		TextRenderer.drawSmallBold(name, context, cursor, middle, Theme.text);
-		cursor += TextRenderer.smallBoldWidth(name);
+		text(context, name, cursor, middle, vanilla ? 0xFFFFFFFF : Theme.text, true);
+		cursor += width(name, true);
 
 		if (showPops) {
 			cursor += GAP;
 			drawIcon(context, totem, cursor, middle - ICON / 2);
 			cursor += ICON + 1;
-			TextRenderer.drawSmall(popText, context, cursor, middle, Theme.text);
+			text(context, popText, cursor, middle, vanilla ? 0xFFFFAA00 : Theme.text, false);
 		}
 
 		matrices.popMatrix();
 
-		if (armor.getValue()) drawArmor(context, player, top - 2);
+		drawItems(context, player, top - 2);
 
 		matrices.popMatrix();
+	}
+
+	private void background(DrawContext context, int left, int top, int width, int height) {
+		switch (mode.getMode()) {
+			case Default -> {
+				Render2D.drawBlurRoundRect(context, left, top, width, height, 0f, 1f, Theme.BLUR, Theme.surface, 1f);
+
+				if (outline.getValue())
+					Render2D.drawRoundOutline(context, left, top, width, height, 0f, 1f, Theme.accent);
+			}
+			case Gay -> {
+				if (ClickGUI.hudGlass.getValue())
+					Render2D.drawBubble(context, left, top, width, height, ROUND, Theme.SHEEN, 7f, 0.35f, 0x66101010, 1f);
+				else Render2D.drawBlurRoundRect(context, left, top, width, height, ROUND, 1f, Theme.BLUR, Theme.surface, 1f);
+
+				if (outline.getValue())
+					Render2D.drawRoundOutline(context, left, top, width, height, ROUND, 1f, Theme.accent);
+			}
+			case Vanilla -> context.fill(left, top, left + width, top + height, 0x40000000);
+		}
+	}
+
+	private int width(String text, boolean bold) {
+		if (mode.isMode(Mode.Vanilla)) return mc.textRenderer.getWidth(text);
+
+		return bold ? TextRenderer.smallBoldWidth(text) : TextRenderer.smallWidth(text);
+	}
+
+	private void text(DrawContext context, String text, int x, int middle, int color, boolean bold) {
+		if (mode.isMode(Mode.Vanilla)) context.drawText(mc.textRenderer, text, x, middle - 3, color, true);
+		else if (bold) TextRenderer.drawSmallBold(text, context, x, middle, color);
+		else TextRenderer.drawSmall(text, context, x, middle, color);
 	}
 
 	private void drawIcon(DrawContext context, ItemStack stack, int x, int y) {
@@ -176,17 +220,22 @@ public final class Nametags extends Module implements HudListener, PacketReceive
 		matrices.popMatrix();
 	}
 
-	private void drawArmor(DrawContext context, PlayerEntity player, int bottom) {
-		List<ItemStack> worn = new ArrayList<>();
+	private void drawItems(DrawContext context, PlayerEntity player, int bottom) {
+		List<ItemStack> items = new ArrayList<>();
 
-		for (EquipmentSlot slot : ARMOR) {
-			ItemStack stack = player.getEquippedStack(slot);
-			if (!stack.isEmpty()) worn.add(stack);
-		}
+		if (held.getValue()) items.add(player.getMainHandStack());
 
-		int x = -worn.size() * 17 / 2;
+		if (armor.getValue())
+			for (EquipmentSlot slot : ARMOR)
+				items.add(player.getEquippedStack(slot));
 
-		for (ItemStack stack : worn) {
+		if (held.getValue()) items.add(player.getOffHandStack());
+
+		items.removeIf(ItemStack::isEmpty);
+
+		int x = -items.size() * 17 / 2;
+
+		for (ItemStack stack : items) {
 			context.drawItem(stack, x, bottom - 16);
 			context.drawStackOverlay(mc.textRenderer, stack, x, bottom - 16);
 			x += 17;

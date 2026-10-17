@@ -41,8 +41,76 @@ public final class Theme {
 	public static final float SEARCH_ROUND = 18f;
 	public static final int slot = 0xDB121212;
 
+	private static final float[] paint = new float[6];
+	private static int wantAccent = accent;
+	private static int wantSecondary = secondary;
+	private static boolean covered;
+	private static boolean started;
+	private static float cover;
+	private static float drift;
+
+	public static void target(int accent, int secondary, boolean covered) {
+		wantAccent = accent;
+		wantSecondary = secondary;
+		Theme.covered = covered;
+
+		if (started) return;
+
+		started = true;
+		Theme.accent = accent;
+		Theme.secondary = secondary;
+		store(0, accent);
+		store(3, secondary);
+	}
+
+	public static void ease(float delta, float speed) {
+		float step = 1f - (float) Math.exp(-delta * 2.2f);
+
+		accent = toward(0, wantAccent, step);
+		secondary = toward(3, wantSecondary, step);
+		cover += ((covered ? 1f : 0f) - cover) * step;
+		drift = (drift + delta * speed * 0.1f) % 1f;
+	}
+
+	public static int lift(int color) {
+		float[] hsb = java.awt.Color.RGBtoHSB((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, null);
+		return 0xFF000000 | (java.awt.Color.HSBtoRGB(hsb[0], hsb[1], Math.max(hsb[2], 0.75f)) & 0xFFFFFF);
+	}
+
+	public static int synced(int color) {
+		return cover <= 0.001f ? color : lerp(color, accent, cover);
+	}
+
+	private static void store(int at, int color) {
+		paint[at] = (color >> 16) & 0xFF;
+		paint[at + 1] = (color >> 8) & 0xFF;
+		paint[at + 2] = color & 0xFF;
+	}
+
+	private static int toward(int at, int want, float step) {
+		paint[at] += (((want >> 16) & 0xFF) - paint[at]) * step;
+		paint[at + 1] += (((want >> 8) & 0xFF) - paint[at + 1]) * step;
+		paint[at + 2] += ((want & 0xFF) - paint[at + 2]) * step;
+
+		return 0xFF000000 | (Math.round(paint[at]) << 16) | (Math.round(paint[at + 1]) << 8) | Math.round(paint[at + 2]);
+	}
+
 	public static int knob() {
 		return lerp(accent, secondary, 0.45f);
+	}
+
+	public static int flow(float span) {
+		return flow(accent, flowEnd(), span);
+	}
+
+	public static int flowEnd() {
+		return lerp(text, secondary, cover);
+	}
+
+	public static int flow(int from, int to, float span) {
+		float wave = (span * 0.7f + drift) % 1f;
+
+		return lerp(from, to, wave < 0.5f ? wave * 2f : (1f - wave) * 2f);
 	}
 
 	public static int fade(int color, float alpha) {

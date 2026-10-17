@@ -92,7 +92,6 @@ public final class AccentManager {
 				name = user[2];
 
 			discord = shade(dominant(image));
-			Theme.accent = discord;
 			upload(image);
 		} catch (Exception ignored) {
 		}

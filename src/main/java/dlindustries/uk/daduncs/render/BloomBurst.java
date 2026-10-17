@@ -60,12 +60,13 @@ public final class BloomBurst {
 			particle.size = SIZE * (0.7f + random.nextFloat() * 0.6f);
 			particle.life = (long) (lifetime * 1000.0 * (0.7 + random.nextDouble() * 0.5));
 			particle.born = java.lang.System.currentTimeMillis();
+			particle.shade = random.nextFloat();
 
 			particles.add(particle);
 		}
 	}
 
-	public void draw(MatrixStack matrices, Camera camera, float bounce, int tint) {
+	public void draw(MatrixStack matrices, Camera camera, float bounce, int from, int to) {
 		if (particles.isEmpty()) {
 			lastFrame = 0L;
 			return;
@@ -91,7 +92,7 @@ public final class BloomBurst {
 
 				Matrix4f matrix = matrices.peek().getPositionMatrix();
 				float half = particle.size / 2f;
-				int color = Theme.fade(tint, alpha);
+				int color = Theme.fade(from == to ? from : Theme.flow(from, to, particle.shade), alpha);
 
 				corner(buffer, matrix, -half, half, 0f, 0f, color);
 				corner(buffer, matrix, -half, -half, 0f, 1f, color);
@@ -165,6 +166,7 @@ public final class BloomBurst {
 		double x, y, z;
 		double vx, vy, vz;
 		float size;
+		float shade;
 		long life;
 		long born;
 		int bounces;

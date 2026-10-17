@@ -31,6 +31,7 @@ public final class Frame {
 		stamp = now;
 
 		dlindustries.uk.daduncs.module.modules.client.ClickGUI.syncTheme();
+		Theme.ease(delta, dlindustries.uk.daduncs.module.modules.client.ClickGUI.gradientSpeed.getValueFloat());
 	}
 
 	public static float delta() {
