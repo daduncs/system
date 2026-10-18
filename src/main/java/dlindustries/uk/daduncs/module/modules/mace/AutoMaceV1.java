@@ -30,6 +30,7 @@ import dlindustries.uk.daduncs.mixin.ClientPlayerInteractionManagerAccessor;
 import dlindustries.uk.daduncs.mixin.KeyBindingAccessor;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
+import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.modules.crystal.HitManager;
 import dlindustries.uk.daduncs.module.modules.sword.AimAssist;
 import dlindustries.uk.daduncs.module.modules.sword.TriggerBot;
@@ -70,10 +71,12 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 
 	public AutoMaceV1() {
 		super(EncryptedString.of("AutoMaceV1"), EncryptedString.of("A simple auto mace yogis made"), -1, Category.MACE);
-		addSettings(delay, height, switchBack, breachSwap, spearReach, doublePop, aim, aimSpeed, silent, silentSpeed, spam);
+		setTag(EncryptedString.of("BANNABLE"));
+		addSettings(delay, height, switchBack, breachSwap, spearReach, doublePop, aim, aimSpeed, silent, silentSpeed, spam, statistical);
 	}
 
 	private final number delay = new number(EncryptedString.of("Delay"), 0, 1000, 200, 1);
+	private final bool statistical = new bool(EncryptedString.of("Statistical Prevention"), true);
 	private final number height = new number(EncryptedString.of("Height"), 0.5, 5, 1.5, 0.1);
 	private final bool switchBack = new bool(EncryptedString.of("Switch Back"), true);
 	private final bool breachSwap = new bool(EncryptedString.of("Breach Swap"), true);
@@ -106,6 +109,9 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 	private boolean wasOnGround;
 	private boolean jumped;
 	private boolean swung;
+	private long jitter;
+	private int backWait;
+	private boolean waited;
 	private boolean holding;
 	private boolean stabbed;
 	private int step;
@@ -201,7 +207,8 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		}
 
 		if (step == DONE || prevSlot != -1) {
-			swapBack();
+			if (backWait > 0) backWait--;
+			else swapBack();
 			return;
 		}
 
@@ -217,10 +224,8 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 
 		if (mace == -1) return;
 
-		if (!spam.getValue()) {
-			if (!timer.hasReached(delay.getValue())) return;
-			if (swung) return;
-		}
+		if (swung) return;
+		if (!spam.getValue() && !timer.hasReached(delay.getValue() + jitter)) return;
 
 		int currentSlot = mc.player.getInventory().getSelectedSlot();
 
@@ -239,14 +244,31 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		}
 
 		if (target.hurtTime > 1 && !aboutToLand() && !passing()) return;
+		if (statistical.getValue() && !waited && roomLeft() && Math.random() < 0.3) {
+			waited = true;
+			return;
+		}
 
 		prevSlot = currentSlot;
-		if (selectSlot(mace)) {
-			attackTarget(target);
-			timer.reset();
-			swung = true;
-			step = DONE;
+		if (!selectSlot(mace)) return;
+
+		if (currentSlot != mace && roomLeft()) {
+			slamWait = 0;
+			step = POP;
+			return;
 		}
+
+		if (!attackTarget(target)) {
+			slamWait = 0;
+			step = POP;
+			return;
+		}
+
+		timer.reset();
+		jitter = statistical.getValue() ? (long) (Math.random() * ClickGUI.VARIANCE * 4) : 0;
+		backWait = statistical.getValue() ? (int) (Math.random() * 3) : 0;
+		swung = true;
+		step = DONE;
 	}
 
 	@Override
@@ -303,9 +325,11 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 
 		SilentAim.stop(this);
 		if (!aim.getValue()) return;
-		if (target == null || target.isRemoved() || !target.isAlive() || mc.currentScreen != null) return;
-		if (!airborne() || maceSlot() == -1) return;
-		if (step != CHARGE && !inRange()) return;
+		if (!aiming()) {
+			gcd[0] = 0;
+			gcd[1] = 0;
+			return;
+		}
 
 		if (held(holding ? 0f : -0.15f)) {
 			holding = true;
@@ -322,20 +346,27 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		float yaw = towards(mc.player.getYaw(), (float) look.yaw(), seconds, 1.0f, 30.0f);
 		float pitch = towards(mc.player.getPitch(), (float) look.pitch(), seconds, 0.4f, 12.0f);
 
-		Rotation smooth = RotationUtils.applyGCD(mc.player.getYaw(), mc.player.getPitch(), yaw, pitch, gcd, true);
+		Rotation smooth = RotationUtils.applyGCD(mc.player.getYaw(), mc.player.getPitch(), yaw, pitch, gcd, false);
 
 		mc.player.setYaw((float) smooth.yaw());
 		mc.player.setPitch(MathHelper.clamp((float) smooth.pitch(), -90.0F, 90.0F));
 	}
 
 	private void silentAim() {
-		boolean valid = aim.getValue() && target != null && !target.isRemoved() && target.isAlive() && mc.currentScreen == null
-				&& airborne() && maceSlot() != -1 && (step == CHARGE || inRange());
+		boolean valid = aim.getValue() && aiming();
 
 		if (valid && SilentAim.rotateTo(this, target, silentSpeed.getRandomValueFloat(), silentSpeed.getRandomValueFloat(), 50f))
 			return;
 
 		SilentAim.rotateBack(this, silentSpeed.getRandomValueFloat(), silentSpeed.getRandomValueFloat());
+	}
+
+	private boolean aiming() {
+		if (target == null || target.isRemoved() || !target.isAlive() || mc.currentScreen != null) return false;
+		if (!airborne() || maceSlot() == -1) return false;
+		if (step == CHARGE) return true;
+
+		return falling() && inRange() && mc.player.getY() > target.getY() + target.getHeight() - 0.5;
 	}
 
 	private Vec3d look() {
@@ -357,11 +388,14 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		if (mc.player.isOnGround()) {
 			jumped = false;
 			swung = false;
+			waited = false;
 			stabbed = false;
 		} else if (wasOnGround && mc.player.getVelocity().y > 0) {
 			jumped = true;
 		} else if (mc.player.getVelocity().y > 0.3 && step != CHARGE) {
 			stabbed = false;
+			swung = false;
+			waited = false;
 		}
 
 		wasOnGround = mc.player.isOnGround();
@@ -440,7 +474,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		Vec3d eye = mc.player.getEyePos();
 		Vec3d center = player.getBoundingBox().getCenter();
 
-		return mc.world.raycast(new RaycastContext(eye, center, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
+		return mc.world.raycast(new RaycastContext(eye, center, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
 	}
 
 	private void charging() {
@@ -520,14 +554,15 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		}
 
 		if (!canHit()) {
-			mc.options.useKey.setPressed(true);
+			if (mc.player.getMainHandStack().contains(DataComponentTypes.KINETIC_WEAPON)) mc.options.useKey.setPressed(true);
 			return;
 		}
 
 		release();
-		mc.player.clearActiveItem();
+		if (mc.player.isUsingItem()) mc.interactionManager.stopUsingItem(mc.player);
 
 		if (selectSlot(mace) && attackTarget(target)) {
+			backWait = statistical.getValue() ? (int) (Math.random() * 3) : 0;
 			timer.reset();
 			swung = true;
 			slamWait = 0;
@@ -777,8 +812,9 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		double safeReach = getSafeReach();
 
 		if (WorldUtils.getEyeToBoxDistance(mc.player, target) > safeReach) return false;
+		if (silent.getValue()) return sees(target, safeReach);
 
-		return sees(target, safeReach);
+		return mc.crosshairTarget instanceof EntityHitResult hit && hit.getEntity() == target;
 	}
 
 	private boolean sees(PlayerEntity player, double reach) {
@@ -787,7 +823,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		Vec3d point = player.getBoundingBox().raycast(eye, end).orElse(null);
 		if (point == null) return false;
 
-		return mc.world.raycast(new RaycastContext(eye, point, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
+		return mc.world.raycast(new RaycastContext(eye, point, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
 	}
 
 	private boolean canHit() {
@@ -800,6 +836,12 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		if (head > -0.5) return head < height.getValue() || next < -0.5;
 
 		return !target.isOnGround() || skipped(target);
+	}
+
+	private boolean roomLeft() {
+		double next = mc.player.getY() + (mc.player.getVelocity().y - 0.08) * 0.98 - (target.getY() + target.getHeight());
+
+		return next > -0.5 && !aboutToLand() && !passing();
 	}
 
 	private boolean skipped(PlayerEntity player) {
@@ -862,7 +904,7 @@ public final class AutoMaceV1 extends Module implements TickListener, AttackList
 		float diff = MathHelper.wrapDegrees(to - from);
 		float factor = 1f - (float) Math.exp(-aimSpeed.getValueFloat() * rate * seconds * 0.03f * (1f + (float) lead()));
 		float step = diff * factor;
-		float maxStep = cap * Math.max(1.0f, seconds * 20.0f);
+		float maxStep = cap * seconds * 20.0f;
 		step = MathHelper.clamp(step, -maxStep, maxStep);
 		return from + step;
 	}

@@ -25,6 +25,7 @@ import dlindustries.uk.daduncs.event.events.HudListener;
 import dlindustries.uk.daduncs.gui.Anim;
 import dlindustries.uk.daduncs.gui.HudEditor;
 import dlindustries.uk.daduncs.gui.Theme;
+import dlindustries.uk.daduncs.font.ScriptFonts;
 import dlindustries.uk.daduncs.managers.LyricsManager;
 import dlindustries.uk.daduncs.managers.MediaManager;
 import dlindustries.uk.daduncs.module.Category;
@@ -80,10 +81,12 @@ public final class MusicHud extends Module implements HudListener {
 	public MusicHud() {
 		super(EncryptedString.of("Music Hud"),
 				EncryptedString.of("Shows what you are listening to"),
+
 				-1,
 				Category.RENDER);
 		addSettings(outline, size, lyrics, lyricsGradient, barGradient, artGradient, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
+
 	}
 
 	@Override
@@ -140,8 +143,8 @@ public final class MusicHud extends Module implements HudListener {
 
 		HudEditor.push(context, size.getValueFloat() / 100f, x, y);
 
-		String title = track.empty() ? "nothing playing" : track.title();
-		String artist = track.empty() ? "" : track.artist();
+		String title = track.empty() ? "nothing playing" : ScriptFonts.visual(ScriptFonts.shape(track.title()));
+		String artist = track.empty() ? "" : ScriptFonts.visual(ScriptFonts.shape(track.artist()));
 
 		int elapsed = media.elapsed();
 		int length = track.duration();
@@ -274,7 +277,7 @@ public final class MusicHud extends Module implements HudListener {
 
 	private void sing(DrawContext context, LyricsManager singer, LyricsManager.Line line, int x, int y, int room, int tall,
 					  int elapsed, float delta, float fade, boolean divider) {
-		List<String> rows = wrap(line.text(), room);
+		List<String> rows = wrap(ScriptFonts.shape(line.text()), room);
 
 		if (line.time() != singing) {
 			leaving = singing == 0 ? new ArrayList<>() : rows;
@@ -294,10 +297,11 @@ public final class MusicHud extends Module implements HudListener {
 		int above = y + 8 - Math.round(gone * 11f);
 
 		for (String row : leaving) {
+			String shown = ScriptFonts.visual(row);
 			int cursor = x;
 
-			for (int letter = 0; letter < row.length(); letter++) {
-				String glyph = String.valueOf(row.charAt(letter));
+			for (int letter = 0; letter < shown.length(); letter++) {
+				String glyph = String.valueOf(shown.charAt(letter));
 				TextRenderer.drawTiny(glyph, context, cursor, above, Theme.fade(read((float) letter / row.length()), fade * Math.max(0f, 1f - gone * 2.5f)));
 				cursor += TextRenderer.tinyWidth(glyph);
 			}
@@ -309,7 +313,7 @@ public final class MusicHud extends Module implements HudListener {
 		int sung = rows.size();
 
 		if (sung < 2 && coming != null)
-			rows.add(fit(coming.text(), room, TextRenderer::tinyWidth));
+			rows.add(fit(ScriptFonts.shape(coming.text()), room, TextRenderer::tinyWidth));
 
 		int letters = 0;
 		for (String row : rows)
@@ -323,13 +327,16 @@ public final class MusicHud extends Module implements HudListener {
 
 		for (int i = 0; i < rows.size(); i++) {
 			String row = rows.get(i);
+			String shown = ScriptFonts.visual(row);
+			boolean flipped = !shown.equals(row);
 			boolean ahead = i >= sung;
 			int cursor = x;
 
-			for (int letter = 0; letter < row.length(); letter++) {
-				float lit = ahead ? 0f : ease(Math.max(0f, Math.min(1f, mouth - (seen + letter))));
-				int colour = Theme.lerp(Theme.muted, read((seen + letter) / (float) letters), lit);
-				String glyph = String.valueOf(row.charAt(letter));
+			for (int letter = 0; letter < shown.length(); letter++) {
+				int at = flipped ? shown.length() - 1 - letter : letter;
+				float lit = ahead ? 0f : ease(Math.max(0f, Math.min(1f, mouth - (seen + at))));
+				int colour = Theme.lerp(Theme.muted, read((seen + at) / (float) letters), lit);
+				String glyph = String.valueOf(shown.charAt(letter));
 
 				TextRenderer.drawTiny(glyph, context, cursor, Math.round(top + rise + (1f - lit) * 2f),
 						Theme.fade(colour, (ahead ? fade * 0.5f : fade) * gone));

@@ -33,6 +33,7 @@ import dlindustries.uk.daduncs.render.Render2D;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.ProjectionUtils;
 import dlindustries.uk.daduncs.utils.TextRenderer;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -68,6 +69,7 @@ public final class TargetHud extends Module implements HudListener {
 	private final number size = new number(EncryptedString.of("Size"), 50, 200, 100, 5);
 	private final bool healthGradient = new bool(EncryptedString.of("Health Gradient"), true);
 	private final bool stick = new bool(EncryptedString.of("Stick To Player"), false);
+	private final bool stayFixed = new bool(EncryptedString.of("Stay Fixed"), false).setVisibility(stick::getValue);
 	private final bool fading = new bool(EncryptedString.of("Fade"), false);
 	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
 	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
@@ -103,7 +105,7 @@ public final class TargetHud extends Module implements HudListener {
 				EncryptedString.of("Shows who you are fighting"),
 				-1,
 				Category.RENDER);
-		addSettings(tint, particles, keepOpen, timeout, outline, size, healthGradient, stick, hideFriends, fading, fadeSize, fadeGradient);
+		addSettings(tint, particles, keepOpen, timeout, outline, size, healthGradient, stick, stayFixed, hideFriends, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 	}
 
@@ -170,8 +172,11 @@ public final class TargetHud extends Module implements HudListener {
 		boolean stuck = false;
 
 		if (stick.getValue() && !HudEditor.editing()) {
-			ProjectionUtils.ProjectedPoint point = ProjectionUtils.project(drawn.getLerpedPos(event.delta).add(0, drawn.getHeight() * 0.6, 0));
+			Vec3d body = drawn.getLerpedPos(event.delta).add(0, drawn.getHeight() * 0.6, 0);
+			ProjectionUtils.ProjectedPoint point = ProjectionUtils.project(body);
 			long now = java.lang.System.currentTimeMillis();
+
+			if (stayFixed.getValue()) scale *= ProjectionUtils.shrink(body);
 
 			if (point != null && point.x() > -full * scale && point.y() > -HEIGHT * scale
 					&& point.x() < mc.getWindow().getScaledWidth() && point.y() < mc.getWindow().getScaledHeight() + HEIGHT * scale) {

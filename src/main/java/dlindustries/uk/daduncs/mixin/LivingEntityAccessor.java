@@ -23,8 +23,12 @@ package dlindustries.uk.daduncs.mixin;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.particle.ParticleEffect;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
+
+import java.util.List;
 
 @Mixin(LivingEntity.class)
 public interface LivingEntityAccessor {
@@ -51,4 +55,9 @@ public interface LivingEntityAccessor {
 
 	@Accessor("attacking")
 	void setAttacking(LivingEntity attacking);
+
+	@Accessor("POTION_SWIRLS")
+	static TrackedData<List<ParticleEffect>> getPotionSwirls() {
+		throw new AssertionError();
+	}
 }

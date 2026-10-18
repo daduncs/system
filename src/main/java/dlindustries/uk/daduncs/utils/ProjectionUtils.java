@@ -86,6 +86,12 @@ public final class ProjectionUtils {
 		return new ProjectedPoint(screenX, screenY, ndcZ);
 	}
 
+	public static float shrink(Vec3d worldPos) {
+		double distance = mc.gameRenderer.getCamera().getCameraPos().distanceTo(worldPos);
+
+		return (float) Math.max(0.15, Math.min(1.0, 6.0 / distance));
+	}
+
 	public record ProjectedPoint(float x, float y, float depth) {
 	}
 }

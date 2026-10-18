@@ -15,6 +15,7 @@
   ],
   "client": [
     "CameraMixin",
+    "EntityRenderManagerMixin",
     "ChatHudMixin",
     "ChatScreenMixin",
     "ClientPlayerEntityMixin",
