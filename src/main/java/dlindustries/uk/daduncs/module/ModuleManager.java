@@ -72,6 +72,7 @@ public final class ModuleManager implements ButtonListener {
 		add(new CrystalOptimizer());
 		add(new ElytraSwap());
 		add(new FastPlace());
+		add(new AutoBridge());
 		add(new FireworkMacro());
 		add(new KeyPearl());
 		add(new NoBreakDelay());

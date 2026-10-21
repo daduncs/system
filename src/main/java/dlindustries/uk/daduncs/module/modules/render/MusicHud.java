@@ -25,7 +25,6 @@ import dlindustries.uk.daduncs.event.events.HudListener;
 import dlindustries.uk.daduncs.gui.Anim;
 import dlindustries.uk.daduncs.gui.HudEditor;
 import dlindustries.uk.daduncs.gui.Theme;
-import dlindustries.uk.daduncs.font.ScriptFonts;
 import dlindustries.uk.daduncs.managers.LyricsManager;
 import dlindustries.uk.daduncs.managers.MediaManager;
 import dlindustries.uk.daduncs.module.Category;
@@ -60,6 +59,8 @@ public final class MusicHud extends Module implements HudListener {
 	private final bool lyricsGradient = new bool(EncryptedString.of("Lyrics Gradient"), true).setVisibility(lyrics::getValue);
 	private final bool barGradient = new bool(EncryptedString.of("Bar Gradient"), true);
 	private final bool artGradient = new bool(EncryptedString.of("Art Gradient"), false);
+	private final bool artistBackground = new bool(EncryptedString.of("Artist Background"), true);
+	private final number artistOpacity = new number(EncryptedString.of("Artist Opacity"), 10, 100, 50, 5).setVisibility(artistBackground::getValue);
 	private final bool fading = new bool(EncryptedString.of("Fade"), false);
 	private final number fadeSize = new number(EncryptedString.of("Fade Size"), 4, 40, 18, 1).setVisibility(fading::getValue);
 	private final bool fadeGradient = new bool(EncryptedString.of("Fade Gradient"), true).setVisibility(fading::getValue);
@@ -84,7 +85,7 @@ public final class MusicHud extends Module implements HudListener {
 
 				-1,
 				Category.RENDER);
-		addSettings(outline, size, lyrics, lyricsGradient, barGradient, artGradient, fading, fadeSize, fadeGradient);
+		addSettings(outline, size, lyrics, lyricsGradient, barGradient, artGradient, artistBackground, artistOpacity, fading, fadeSize, fadeGradient);
 		HudEditor.register(this);
 
 	}
@@ -143,8 +144,8 @@ public final class MusicHud extends Module implements HudListener {
 
 		HudEditor.push(context, size.getValueFloat() / 100f, x, y);
 
-		String title = track.empty() ? "nothing playing" : ScriptFonts.visual(ScriptFonts.shape(track.title()));
-		String artist = track.empty() ? "" : ScriptFonts.visual(ScriptFonts.shape(track.artist()));
+		String title = track.empty() ? "nothing playing" : track.title();
+		String artist = track.empty() ? "" : track.artist();
 
 		int elapsed = media.elapsed();
 		int length = track.duration();
@@ -174,6 +175,11 @@ public final class MusicHud extends Module implements HudListener {
 		int height = HEIGHT + (detached ? 0 : room);
 
 		glass(context, x, y, wide, height, fade);
+
+		if (artistBackground.getValue() && !track.empty()) {
+			MediaManager.Portrait face = media.getArtist(track);
+			if (face != null) artist(context, face, x, y, wide, height, fade);
+		}
 
 		if (detached)
 			glass(context, x + torn, y, ART + 10, HEIGHT, fade);
@@ -232,6 +238,19 @@ public final class MusicHud extends Module implements HudListener {
 		HudEditor.pop(context);
 	}
 
+	private void artist(DrawContext context, MediaManager.Portrait face, int x, int y, int width, int height, float fade) {
+		float tall = height;
+		float across = tall * face.aspect();
+
+		if (across > width) {
+			across = width;
+			tall = across / face.aspect();
+		}
+
+		Render2D.drawRoundImage(context, x + (width - across) / 2f, y + height - tall, across, tall, 12f, face.id(),
+				Theme.fade(0xFFFFFFFF, fade * artistOpacity.getValueFloat() / 100f));
+	}
+
 	private void glass(DrawContext context, int x, int y, int width, int height, float fade) {
 		if (fading.getValue())
 			Render2D.drawFade(context, x, y, width, height, 12, fadeSize.getValueFloat(),
@@ -277,7 +296,7 @@ public final class MusicHud extends Module implements HudListener {
 
 	private void sing(DrawContext context, LyricsManager singer, LyricsManager.Line line, int x, int y, int room, int tall,
 					  int elapsed, float delta, float fade, boolean divider) {
-		List<String> rows = wrap(ScriptFonts.shape(line.text()), room);
+		List<String> rows = wrap(line.text(), room);
 
 		if (line.time() != singing) {
 			leaving = singing == 0 ? new ArrayList<>() : rows;
@@ -297,11 +316,10 @@ public final class MusicHud extends Module implements HudListener {
 		int above = y + 8 - Math.round(gone * 11f);
 
 		for (String row : leaving) {
-			String shown = ScriptFonts.visual(row);
 			int cursor = x;
 
-			for (int letter = 0; letter < shown.length(); letter++) {
-				String glyph = String.valueOf(shown.charAt(letter));
+			for (int letter = 0; letter < row.length(); letter++) {
+				String glyph = String.valueOf(row.charAt(letter));
 				TextRenderer.drawTiny(glyph, context, cursor, above, Theme.fade(read((float) letter / row.length()), fade * Math.max(0f, 1f - gone * 2.5f)));
 				cursor += TextRenderer.tinyWidth(glyph);
 			}
@@ -313,7 +331,7 @@ public final class MusicHud extends Module implements HudListener {
 		int sung = rows.size();
 
 		if (sung < 2 && coming != null)
-			rows.add(fit(ScriptFonts.shape(coming.text()), room, TextRenderer::tinyWidth));
+			rows.add(fit(coming.text(), room, TextRenderer::tinyWidth));
 
 		int letters = 0;
 		for (String row : rows)
@@ -327,16 +345,13 @@ public final class MusicHud extends Module implements HudListener {
 
 		for (int i = 0; i < rows.size(); i++) {
 			String row = rows.get(i);
-			String shown = ScriptFonts.visual(row);
-			boolean flipped = !shown.equals(row);
 			boolean ahead = i >= sung;
 			int cursor = x;
 
-			for (int letter = 0; letter < shown.length(); letter++) {
-				int at = flipped ? shown.length() - 1 - letter : letter;
-				float lit = ahead ? 0f : ease(Math.max(0f, Math.min(1f, mouth - (seen + at))));
-				int colour = Theme.lerp(Theme.muted, read((seen + at) / (float) letters), lit);
-				String glyph = String.valueOf(shown.charAt(letter));
+			for (int letter = 0; letter < row.length(); letter++) {
+				float lit = ahead ? 0f : ease(Math.max(0f, Math.min(1f, mouth - (seen + letter))));
+				int colour = Theme.lerp(Theme.muted, read((seen + letter) / (float) letters), lit);
+				String glyph = String.valueOf(row.charAt(letter));
 
 				TextRenderer.drawTiny(glyph, context, cursor, Math.round(top + rise + (1f - lit) * 2f),
 						Theme.fade(colour, (ahead ? fade * 0.5f : fade) * gone));

@@ -276,6 +276,10 @@ public final class Card {
 		return null;
 	}
 
+	public boolean overHeader() {
+		return wasHovered && key != null && binding == CLOSED;
+	}
+
 	public boolean overInfo() {
 		return tip.target() > 0.5f;
 	}

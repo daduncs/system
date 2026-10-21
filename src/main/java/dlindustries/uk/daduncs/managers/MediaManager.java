@@ -20,6 +20,7 @@
 
 package dlindustries.uk.daduncs.managers;
 
+import dlindustries.uk.daduncs.utils.Cutout;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
@@ -42,6 +43,8 @@ import javax.imageio.ImageIO;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -127,6 +130,9 @@ public final class MediaManager {
 
 	private volatile Track track = Track.NOTHING;
 	private volatile Identifier cover;
+	private volatile Portrait artist;
+	private volatile String artistKey = "";
+	private final Map<String, Portrait> artists = new HashMap<>();
 	private volatile int hot;
 	private volatile int cold;
 	private volatile String coverKey = "";
@@ -138,6 +144,9 @@ public final class MediaManager {
 	private Path script;
 	private Path coverScript;
 	private boolean started;
+
+	public record Portrait(Identifier id, float aspect) {
+	}
 
 	public record Track(String artist, String title, int position, int duration, boolean playing) {
 		public static final Track NOTHING = new Track("", "", 0, 0, false);
@@ -173,6 +182,19 @@ public final class MediaManager {
 
 	public Identifier getCover() {
 		return cover;
+	}
+
+	public Portrait getArtist(Track now) {
+		String name = lead(now.artist());
+
+		if (!name.equalsIgnoreCase(artistKey)) {
+			artistKey = name;
+			artist = artists.get(name.toLowerCase());
+
+			if (artist == null && !name.isEmpty()) portrait(name);
+		}
+
+		return artist;
 	}
 
 	public boolean isSpotify() {
@@ -411,6 +433,83 @@ public final class MediaManager {
 		}
 
 		return best;
+	}
+
+	private void portrait(String name) {
+		Thread hunt = new Thread(() -> {
+			try {
+				byte[] bytes = face(name);
+				if (bytes == null) return;
+
+				BufferedImage photo = ImageIO.read(new ByteArrayInputStream(bytes));
+				if (photo == null) return;
+
+				BufferedImage cut = Cutout.cut(photo);
+				if (cut == null) return;
+
+				ByteArrayOutputStream out = new ByteArrayOutputStream();
+				ImageIO.write(cut, "PNG", out);
+				byte[] ready = out.toByteArray();
+				float aspect = (float) cut.getWidth() / cut.getHeight();
+
+				MinecraftClient.getInstance().execute(() -> {
+					try {
+						NativeImage image = NativeImage.read(new ByteArrayInputStream(ready));
+						NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "system_artist", image);
+
+						Identifier id = Identifier.of("system", "artist_" + java.lang.System.nanoTime());
+						MinecraftClient.getInstance().getTextureManager().registerTexture(id, texture);
+						texture.upload();
+
+						Portrait done = new Portrait(id, aspect);
+						artists.put(name.toLowerCase(), done);
+						if (name.equalsIgnoreCase(artistKey)) artist = done;
+					} catch (Exception ignored) {
+					}
+				});
+			} catch (Exception ignored) {
+			}
+		}, "artist");
+
+		hunt.setDaemon(true);
+		hunt.start();
+	}
+
+	private static byte[] face(String name) {
+		try {
+			HttpClient web = HttpClient.newHttpClient();
+			HttpRequest ask = HttpRequest.newBuilder()
+					.uri(URI.create("https://api.deezer.com/search/artist?limit=5&q="
+							+ URLEncoder.encode(name, StandardCharsets.UTF_8)))
+					.GET()
+					.build();
+
+			JsonArray found = JsonParser.parseString(web.send(ask, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).body())
+					.getAsJsonObject().getAsJsonArray("data");
+
+			for (int i = 0; i < found.size(); i++) {
+				JsonObject one = found.get(i).getAsJsonObject();
+				if (!one.get("name").getAsString().equalsIgnoreCase(name)) continue;
+
+				String link = one.get("picture_xl").getAsString();
+				if (link.contains("/artist//")) return null;
+
+				byte[] bytes = web.send(HttpRequest.newBuilder().uri(URI.create(link)).GET().build(),
+						HttpResponse.BodyHandlers.ofByteArray()).body();
+
+				return bytes.length > 0 ? bytes : null;
+			}
+
+			return null;
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static String lead(String artist) {
+		if (artist == null) return "";
+
+		return artist.split("(?i),|&|;| feat\\.? | ft\\.? | x ")[0].trim();
 	}
 
 	private void upload(byte[] bytes) {

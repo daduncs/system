@@ -122,6 +122,8 @@ public final class ClickGui extends Screen {
 	private String query = "";
 	private String typedLast = "";
 	private long scrolled;
+	private long pointed;
+	private CharSequence helperText;
 	private String ghost = "";
 	private int ghostAt;
 	private boolean searching;
@@ -444,13 +446,23 @@ public final class ClickGui extends Screen {
 		if (searching)
 			scrolled = 0;
 
-		helper.to(scrolled != 0 && java.lang.System.currentTimeMillis() - scrolled > 3000 ? 1f : 0f);
+		long now = java.lang.System.currentTimeMillis();
+		boolean pointing = visible().stream().anyMatch(Card::overHeader);
+
+		if (!pointing) pointed = 0;
+		else if (pointed == 0) pointed = now;
+
+		boolean binds = pointed != 0 && now - pointed > 1500;
+		boolean search = scrolled != 0 && now - scrolled > 3000;
+
+		if (binds) helperText = EncryptedString.of("middle click to set a keybind");
+		else if (search) helperText = EncryptedString.of("ctrl + f for searchbar");
+
+		helper.to(binds || search ? 1f : 0f);
 		helper.update(delta);
 
-		if (helper.get() > 0.01f) {
-			CharSequence hint = EncryptedString.of("ctrl + f for searchbar");
-
-			TextRenderer.drawSmall(hint, context, panelDrawX + panelW / 2 - TextRenderer.smallWidth(hint) / 2,
+		if (helper.get() > 0.01f && helperText != null) {
+			TextRenderer.drawSmall(helperText, context, panelDrawX + panelW / 2 - TextRenderer.smallWidth(helperText) / 2,
 					panelDrawY + PANEL_H + 20, Theme.fade(0xFFFFFFFF, content * helper.get() * 0.5f));
 		}
 

@@ -28,6 +28,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     compileOnly files("lib/annotations-1.0.6.jar")
+
+    implementation 'com.microsoft.onnxruntime:onnxruntime:1.20.0'
+    shadow 'com.microsoft.onnxruntime:onnxruntime:1.20.0'
 }
 
 processResources {
@@ -65,8 +68,10 @@ jar {
     }
 
     // Include JARs from lib/ directory in the final JAR
-    from {
+    from({
         configurations.shadow.collect { it.isDirectory() ? it : zipTree(it) }
+    }) {
+        exclude 'ai/onnxruntime/native/linux-*/**', 'ai/onnxruntime/native/osx-*/**', '**/*.pdb'
     }
 
     // Avoid duplicating META-INF files when merging libraries
