@@ -54,7 +54,7 @@ We appreciate contributions. So if you want to support us, feel free to make cha
 ## Contributors
 
 Special thanks to the contributors who have helped in development:
-- [yog1s](https://github.com/yog1s) - Helped a lot in development
+- [yog1s](https://github.com/yog1x) - Helped a lot in development
 
 ## Gameplay & Trailer
 
