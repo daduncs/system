@@ -9,7 +9,9 @@
 > **🌐 Full website here** [download.daduncs.cloud](https://download.daduncs.cloud)
 
 ---
+## Overview
 
+System is a free and open-source mixin-based injection hacked client using the Fabric API for Minecraft. Dedicated for CrystalPvp 
 ## Issues
 
 If you notice any bugs or want to make a meaningful suggestion, you can let us know by opening an issue [here](https://github.com/daduncs/system/issues), or join our discord server and ping me.
@@ -54,6 +56,7 @@ We appreciate contributions. So if you want to support us, feel free to make cha
 Special thanks to the contributors who have helped in development:
 - [yog1s](https://github.com/yog1s) - Helped a lot in development
 
-## Gameplay Proof
+## Gameplay & Trailer
 
-2 hour proof system works on minemen uncut gameplay: https://youtu.be/GkOxqo72qeg
+https://youtu.be/GkOxqo72qeg
+https://www.youtube.com/watch?v=Wdv_b5RYLt8
