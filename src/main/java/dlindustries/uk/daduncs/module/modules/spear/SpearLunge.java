@@ -316,7 +316,7 @@ public final class SpearLunge extends Module implements AttackListener, TickList
             }
         }
         if (cooldown.isMode(CooldownMode.VANILLA)) {
-            float required = Math.max(1.0F, cooldownThreshold.getValueFloat() / 100.0F);
+            float required = cooldownThreshold.getValueFloat() / 100.0F;
             return mc.player.getAttackCooldownProgress(0.0F) >= required;
         } else if (cooldown.isMode(CooldownMode.PAPER)) {
             return mc.player.getAttackCooldownProgress(0.0F) >= 1.0F;
