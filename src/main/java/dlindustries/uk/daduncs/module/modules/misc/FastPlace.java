@@ -49,12 +49,11 @@ public final class FastPlace extends Module {
 			return;
 
 		Item main = mc.player.getMainHandStack().getItem();
-		Item off = mc.player.getOffHandStack().getItem();
 
-		if (!(main instanceof BlockItem) && !(off instanceof BlockItem))
+		if (!(main instanceof BlockItem))
 			return;
 
-		if (excludeAnchors.getValue() && isAnchorOrGlowstone(main, off))
+		if (excludeAnchors.getValue() && isAnchorOrGlowstone(main, mc.player.getOffHandStack().getItem()))
 			return;
 
 		MinecraftClientAccessor accessor = (MinecraftClientAccessor) mc;

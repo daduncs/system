@@ -112,6 +112,7 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
     private enum EquipState {
         IDLE,
         EQUIPPING,
+        USE_CHESTPLATE,
         RESTORING
     }
 
@@ -292,7 +293,7 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
         PlayerEntity player = mc.player;
 
         if (equipState == EquipState.EQUIPPING) {
-            if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+            if (actionSentThisTick || player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
                 return;
             }
 
@@ -303,8 +304,18 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
             }
 
             InventoryUtils.setInvSlot(chestSlot);
+            equipState = EquipState.USE_CHESTPLATE;
+            currentStepDelayMs = Math.max(50L, randomDelay());
+            delayTimer.reset();
+        } else if (equipState == EquipState.USE_CHESTPLATE) {
+            if (actionSentThisTick || player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
+                return;
+            }
+
             if (isChestplate(player.getMainHandStack())) {
-                mc.interactionManager.interactItem(player, Hand.MAIN_HAND);
+                if (mc.interactionManager.interactItem(player, Hand.MAIN_HAND).isAccepted()) {
+                    player.swingHand(Hand.MAIN_HAND);
+                }
             }
 
             int restoreSlot = getRestoreSlot();
@@ -318,7 +329,7 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
 
             finishEquip();
         } else if (equipState == EquipState.RESTORING) {
-            if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+            if (actionSentThisTick || player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
                 return;
             }
 

@@ -21,10 +21,10 @@
 package dlindustries.uk.daduncs.module.modules.misc;
 
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.imixin.IKeyBinding;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.utils.EncryptedString;
-import org.lwjgl.glfw.GLFW;
 
 public final class NoJumpDelay extends Module implements TickListener {
 	public NoJumpDelay() {
@@ -49,16 +49,20 @@ public final class NoJumpDelay extends Module implements TickListener {
 
 	@Override
 	public void onTick() {
-		if (mc.currentScreen != null)
+		if (mc.player == null || mc.currentScreen != null)
 			return;
 
-		if (!mc.player.isOnGround())
+		if (!mc.player.isOnGround()
+				|| mc.player.isSubmergedInWater()
+				|| mc.player.isInLava()
+				|| mc.player.hasVehicle()
+				|| mc.player.getAbilities().flying)
 			return;
 
-		if (GLFW.glfwGetKey(mc.getWindow().getHandle(), GLFW.GLFW_KEY_SPACE) != GLFW.GLFW_PRESS)
+		if (!((IKeyBinding) mc.options.jumpKey).isActuallyPressed())
 			return;
 
 		mc.options.jumpKey.setPressed(false);
-		mc.player.jump();
+		mc.options.jumpKey.setPressed(true);
 	}
 }

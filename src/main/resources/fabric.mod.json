@@ -16,6 +16,7 @@
   "license": "MIT",
   "//": "Note: Stealth disguise profile for anti-detection. Original Marlow's Crystal Optimizer is MIT-licensed by Bram & Marlow. System repository: https://github.com/daduncs/system",
   "custom": {
+    "system:version": "${version}",
     "disclaimer": "Stealth disguise profile for anti-detection. Original Marlow's Crystal Optimizer is MIT-licensed by Bram & Marlow. System repository: https://github.com/daduncs/system"
   },
   "icon": "assets/system/icon.png",

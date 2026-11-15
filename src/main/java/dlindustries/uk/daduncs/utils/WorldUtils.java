@@ -153,9 +153,12 @@ public final class WorldUtils {
 	}
 
 
-	public static void placeBlock(BlockHitResult blockHit, boolean swingHand) {
+	public static boolean placeBlock(BlockHitResult blockHit, boolean swingHand) {
+		if (mc.player == null || mc.interactionManager == null || blockHit == null) return false;
+		if (!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canBlockActionNow()) return false;
 		ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, blockHit);
 		if (result.isAccepted() && swingHand) mc.player.swingHand(Hand.MAIN_HAND);
+		return result.isAccepted();
 	}
 
 	public static Stream<WorldChunk> getLoadedChunks() {
@@ -221,11 +224,17 @@ public final class WorldUtils {
 	}
 
 	public static boolean doesRaycastHitEntity(PlayerEntity player, Entity target, double maxReach) {
-		if (player == null || target == null) return false;
+		if (player == null || target == null || mc.world == null) return false;
 		Vec3d eyePos = player.getEyePos();
 		Vec3d lookVec = getPlayerLookVec(player);
 		Vec3d reachVec = eyePos.add(lookVec.multiply(maxReach));
-		return target.getBoundingBox().raycast(eyePos, reachVec).isPresent();
+		var entityHit = target.getBoundingBox().raycast(eyePos, reachVec);
+		if (entityHit.isEmpty()) return false;
+		HitResult blockHit = mc.world.raycast(new RaycastContext(eyePos, entityHit.get(), RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, player));
+		if (blockHit.getType() == HitResult.Type.BLOCK && blockHit.getPos().squaredDistanceTo(eyePos) < entityHit.get().squaredDistanceTo(eyePos)) {
+			return false;
+		}
+		return true;
 	}
 
 	public static boolean isTool(ItemStack itemStack) {

@@ -58,8 +58,8 @@ public final class RotationUtils {
 	}
 
 	public static Rotation getDiff(Rotation rotation1, Rotation rotation2) {
-		double yaw = Math.abs(Math.max(rotation1.yaw(), rotation2.yaw()) - Math.min(rotation1.yaw(), rotation2.yaw()));
-		double pitch = Math.abs(Math.max(rotation1.pitch(), rotation2.pitch()) - Math.min(rotation1.pitch(), rotation2.pitch()));
+		double yaw = Math.abs(MathHelper.wrapDegrees((float) (rotation1.yaw() - rotation2.yaw())));
+		double pitch = Math.abs(rotation1.pitch() - rotation2.pitch());
 
 		return new Rotation(yaw, pitch);
 	}
@@ -91,7 +91,9 @@ public final class RotationUtils {
 				dz = to.z - from.z,
 				dist = MathHelper.sqrt((float) (dx * dx + dz * dz));
 
-		return new Rotation(MathHelper.wrapDegrees(Math.toDegrees(Math.atan2(dz, dx)) - 90.0), -MathHelper.wrapDegrees(Math.toDegrees(Math.atan2(dy, dist))));
+		double yaw = (dx == 0.0 && dz == 0.0) ? 0.0 : MathHelper.wrapDegrees(Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+		double pitch = (dist == 0.0 && dy == 0.0) ? 0.0 : MathHelper.clamp(-MathHelper.wrapDegrees(Math.toDegrees(Math.atan2(dy, dist))), -90.0, 90.0);
+		return new Rotation(yaw, pitch);
 	}
 
 	public static double getAngleToRotation(Rotation rotation) {

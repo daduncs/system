@@ -27,7 +27,6 @@ import dlindustries.uk.daduncs.gui.Notice;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.crystal.HitManager;
-import dlindustries.uk.daduncs.module.modules.mace.AutoMaceV1;
 import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.range;
 import dlindustries.uk.daduncs.module.setting.mode;
@@ -124,22 +123,22 @@ public final class AimAssist extends Module implements HudListener, MouseMoveLis
 	private final bool stopAtTargetHorizontal = new bool(EncryptedString.of("Stop at Target Horiz"), false)
 			.setDescription(EncryptedString.of("Stops horizontally assisting if already aiming at the entity, helps bypass anti-cheat"));
 
-	private final number radius = new number(EncryptedString.of("Radius"), 0.1, 15, 3.0, 0.1);
+	private final number radius = new number(EncryptedString.of("Radius"), 0.1, 15, 4.0, 0.1);
 
 	private final bool seeOnly = new bool(EncryptedString.of("Visible Only"), true);
 	private final bool ignoreNoHP = new bool(EncryptedString.of("Ignore 0 HP"), true)
 			.setDescription(EncryptedString.of("Stops assisting if target entity has 0 HP (is dead)"));
-	private final bool maxReachMode = new bool(EncryptedString.of("Max Reach Mode"), false)
+	private final bool maxReachMode = new bool(EncryptedString.of("Max Reach Mode"), true)
 			.setDescription(EncryptedString.of("Aims at the nearest point of the hitbox to maximize reach"));
 	private final bool lockMode = new bool(EncryptedString.of("Lock Mode"), false)
 			.setDescription(EncryptedString.of("Full targets the player you attack manually (doesnt work with triggerbot)"));
 
 	private final number fov = new number(EncryptedString.of("FOV"), 5, 360, 90, 1);
 
-	private final range pitchSpeed = new range(EncryptedString.of("Vertical Speed"), 0, 10, 0.1, 4.0, 5.5);
+	private final range pitchSpeed = new range(EncryptedString.of("Vertical Speed"), 0, 10, 0.1, 6.0, 10.0);
 	private final range yawSpeed = new range(EncryptedString.of("Horizontal Speed"), 0, 10, 0.1, 7.5, 10.0);
 
-	private final bool aimResistance = new bool(EncryptedString.of("Aim Resistance"), false)
+	private final bool aimResistance = new bool(EncryptedString.of("Aim Resistance"), true)
 			.setDescription(EncryptedString.of("Resists moving off target when manually aiming to keep crosshair centered"));
 
 	private final number resistanceStrength = new number(EncryptedString.of("Resistance"), 0.1, 0.9, 0.45, 0.05)
@@ -148,7 +147,7 @@ public final class AimAssist extends Module implements HudListener, MouseMoveLis
 	private final bool softFriction = new bool(EncryptedString.of("Soft Slowdown"), true)
 			.setDescription(EncryptedString.of("Smoothly decelerates when centered on target for extra stealth"));
 
-	private final number speedChange = new number(EncryptedString.of("Speed Delay"), 0, 1000, 200, 1)
+	private final number speedChange = new number(EncryptedString.of("Speed Delay"), 0, 1000, 000, 1)
 			.setDescription(EncryptedString.of("Time in milliseconds to wait after resetting random speed"));
 
 	private final number randomization = new number(EncryptedString.of("Chance"), 0, 100, 100, 1);
@@ -188,12 +187,6 @@ public final class AimAssist extends Module implements HudListener, MouseMoveLis
 
 	@Override
 	public void onEnable() {
-		AutoMaceV1 autoMace = System.INSTANCE.getModuleManager().getModule(AutoMaceV1.class);
-		if (autoMace != null && autoMace.isEnabled()) {
-			autoMace.setEnabled(false);
-			Notice.show("AutoMace was turned off to not interfere with the Aim Assist");
-		}
-
 		move = true;
 		initialized = false;
 		currentAimVelocityYaw = 0.0f;

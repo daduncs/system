@@ -53,6 +53,7 @@ public class PackSpoof extends Module implements PacketReceiveListener {
                 event.cancel();
 
                 mc.getNetworkHandler().sendPacket(new ResourcePackStatusC2SPacket(packPacket.id(), ResourcePackStatusC2SPacket.Status.ACCEPTED));
+                mc.getNetworkHandler().sendPacket(new ResourcePackStatusC2SPacket(packPacket.id(), ResourcePackStatusC2SPacket.Status.DOWNLOADED));
                 mc.getNetworkHandler().sendPacket(new ResourcePackStatusC2SPacket(packPacket.id(), ResourcePackStatusC2SPacket.Status.SUCCESSFULLY_LOADED));
             }
         }

@@ -83,12 +83,13 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 		eventManager.remove(TickListener.class, this);
 		eventManager.remove(ItemUseListener.class, this);
 		eventManager.remove(AttackListener.class, this);
+		reset();
 		super.onDisable();
 	}
 
 	@Override
 	public void onTick() {
-		if (mc.currentScreen != null || mc.player == null)
+		if (mc.currentScreen != null || mc.player == null || mc.player.isUsingItem())
 			return;
 
 		long switchDelayMs = switchDelay.getValueLong() * 50L;
@@ -152,7 +153,7 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 						resetKeys();
 
 						if (!mc.player.isHolding(Items.OBSIDIAN)) {
-							if (!switchReady || AntibanbyDaduncs.isSlotPending()) {
+							if (!switchReady || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
 								return;
 							}
 
@@ -168,34 +169,35 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 						}
 
 						if (mc.player.isHolding(Items.OBSIDIAN)) {
-							if (!placeReady || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+							if (!placeReady || !AntibanbyDaduncs.canBlockActionNow() || AntibanbyDaduncs.isSlotPending()) {
 								return;
 							}
-
-							if (clickSimulation.getValue())
-								MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 
 							int randomNum = MathUtils.randomInt(1, 100);
 
 							if (randomNum <= placeChance.getValueInt()) {
-								dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-								if (tm != null) {
-									tm.recordModuleEvent("dtapsetup", "PLACE_OBSIDIAN", "WorldUtils.placeBlock at " + hit.getBlockPos().toShortString() + " -> crystalling=true", null);
+								if (WorldUtils.placeBlock(hit, true)) {
+									if (clickSimulation.getValue())
+										MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+
+									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+									if (tm != null) {
+										tm.recordModuleEvent("dtapsetup", "PLACE_OBSIDIAN", "WorldUtils.placeBlock at " + hit.getBlockPos().toShortString() + " -> crystalling=true", null);
+									}
+
+									lastObsidianPlaceTime = java.lang.System.currentTimeMillis();
+									lastObsidianPos = hit.getBlockPos();
+									placeTimer.reset();
+									crystalling = true;
+
+									resetKeys();
+									switchTimer.reset();
+									return;
 								}
-
-								WorldUtils.placeBlock(hit, true);
-
-								lastObsidianPlaceTime = java.lang.System.currentTimeMillis();
-								lastObsidianPos = hit.getBlockPos();
-								placeTimer.reset();
-								crystalling = true;
-
-								resetKeys();
-								switchTimer.reset();
-								return;
 							}
 						}
 					} else {
+						resetKeys();
 						crystalling = true;
 					}
 				}
@@ -203,7 +205,7 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 
 			if (crystalling) {
 				if (!mc.player.isHolding(Items.END_CRYSTAL)) {
-					if (!switchReady || AntibanbyDaduncs.isSlotPending()) {
+					if (!switchReady || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
 						return;
 					}
 
@@ -284,11 +286,15 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 
 	@Override
 	public void onAttack(AttackEvent event) {
+		if (mc.player == null) return;
 		if (mc.player.getMainHandStack().isOf(Items.END_CRYSTAL) && GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS)
 			event.cancel();
 	}
 
 	private void resetKeys() {
+		if (mc.interactionManager != null && mc.interactionManager.isBreakingBlock()) {
+			mc.interactionManager.cancelBlockBreaking();
+		}
 		if (mc.options == null) return;
 		if (mc.options.hotbarKeys != null) {
 			for (net.minecraft.client.option.KeyBinding hotbarKey : mc.options.hotbarKeys) {

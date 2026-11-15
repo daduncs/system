@@ -28,6 +28,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.util.math.MathHelper;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -82,7 +83,7 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 
 		dlindustries.uk.daduncs.utils.rotation.SilentRot.beginMove(this.sr$my);
 		float wy = dlindustries.uk.daduncs.utils.rotation.SilentRot.yaw();
-		float wp = dlindustries.uk.daduncs.utils.rotation.SilentRot.pitch();
+		float wp = MathHelper.clamp(dlindustries.uk.daduncs.utils.rotation.SilentRot.pitch(), -90.0f, 90.0f);
 		p.setYaw(wy);
 		p.setPitch(wp);
 		p.lastYaw = wy;
@@ -124,7 +125,7 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 		this.sr$lp = p.lastPitch;
 		this.sr$save = true;
 		float wy = dlindustries.uk.daduncs.utils.rotation.SilentRot.yaw();
-		float wp = dlindustries.uk.daduncs.utils.rotation.SilentRot.pitch();
+		float wp = MathHelper.clamp(dlindustries.uk.daduncs.utils.rotation.SilentRot.pitch(), -90.0f, 90.0f);
 		p.setYaw(wy);
 		p.setPitch(wp);
 		p.lastYaw = wy;
@@ -140,16 +141,6 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 			p.lastYaw = this.sr$ly;
 			p.lastPitch = this.sr$lp;
 			this.sr$save = false;
-		}
-
-		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent() &&
-				!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isMovementSent()) {
-			ClientPlayerEntity p = (ClientPlayerEntity) (Object) this;
-			if (p.networkHandler != null) {
-				p.networkHandler.sendPacket(new net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket.OnGroundOnly(
-						p.isOnGround(), p.horizontalCollision
-				));
-			}
 		}
 	}
 

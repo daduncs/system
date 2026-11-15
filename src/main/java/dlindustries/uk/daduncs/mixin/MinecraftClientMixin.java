@@ -63,6 +63,8 @@ public class MinecraftClientMixin {
 			TickListener.TickEvent event = new TickListener.TickEvent();
 
 			EventManager.fire(event);
+		} else {
+			dlindustries.uk.daduncs.managers.AntibanbyDaduncs.reset();
 		}
 	}
 
@@ -90,7 +92,9 @@ public class MinecraftClientMixin {
 
 	@Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
 	private void onItemUse(CallbackInfo ci) {
-		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()) {
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isDiggingSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isReleasingSent()) {
 			ci.cancel();
 			return;
 		}
@@ -108,7 +112,15 @@ public class MinecraftClientMixin {
 
 	@Inject(method = "doAttack", at = @At("HEAD"), cancellable = true)
 	private void onAttack(CallbackInfoReturnable<Boolean> cir) {
-		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()) {
+		MinecraftClient client = (MinecraftClient) (Object) this;
+		boolean entityOrSpear = (client.crosshairTarget != null && client.crosshairTarget.getType() == net.minecraft.util.hit.HitResult.Type.ENTITY)
+				|| (client.player != null && client.player.getMainHandStack().contains(net.minecraft.component.DataComponentTypes.PIERCING_WEAPON));
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isBlockPlaceSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isDigStartStopSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isReleasingSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isUseItemSent()
+				|| (entityOrSpear && dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isDiggingSent())) {
 			cir.setReturnValue(false);
 			return;
 		}
@@ -129,6 +141,19 @@ public class MinecraftClientMixin {
 
 	@Inject(method = "handleBlockBreaking", at = @At("HEAD"), cancellable = true)
 	private void onBlockBreaking(boolean breaking, CallbackInfo ci) {
+		if (!breaking) {
+			return;
+		}
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isEntityInteractSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isBlockPlaceSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isUseItemSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isReleasingSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isDigStartStopSent()) {
+			ci.cancel();
+			return;
+		}
+
 		BlockBreakingListener.BlockBreakingEvent event = new BlockBreakingListener.BlockBreakingEvent();
 
 		EventManager.fire(event);

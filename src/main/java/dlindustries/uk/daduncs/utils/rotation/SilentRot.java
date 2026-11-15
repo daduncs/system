@@ -32,8 +32,9 @@ public final class SilentRot {
 	}
 
 	public static void set(float yaw, float pitch, Object who) {
+		if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
 		y = yaw;
-		p = pitch;
+		p = Math.max(-90.0f, Math.min(90.0f, pitch));
 		active = true;
 		holder = who;
 	}

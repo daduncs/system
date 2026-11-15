@@ -42,6 +42,9 @@ import static dlindustries.uk.daduncs.System.mc;
 public final class InventoryUtils {
 
 	public static void setInvSlot(int slot) {
+		if (mc.player == null || mc.interactionManager == null) return;
+		if (slot < 0 || slot > 8) return;
+		if (mc.currentScreen != null) return;
 		mc.player.getInventory().setSelectedSlot(slot);
 		((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
 	}
@@ -205,7 +208,7 @@ public final class InventoryUtils {
 		int itemIndex = getAxeSlot();
 
 		if (itemIndex != -1) {
-			mc.player.getInventory().setSelectedSlot(itemIndex);
+			setInvSlot(itemIndex);
 			return true;
 		} else return false;
 	}

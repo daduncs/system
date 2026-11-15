@@ -55,10 +55,10 @@ public final class Fly extends Module implements TickListener {
 		eventManager.remove(TickListener.class, this);
 
 		if (mc.player != null) {
-			boolean creative = mc.player.isCreative();
+			boolean creativeOrSpectator = mc.player.isCreative() || mc.player.isSpectator();
 
-			mc.player.getAbilities().flying = creative && mc.player.getAbilities().flying;
-			mc.player.getAbilities().allowFlying = creative;
+			mc.player.getAbilities().flying = creativeOrSpectator && mc.player.getAbilities().flying;
+			mc.player.getAbilities().allowFlying = creativeOrSpectator;
 			mc.player.getAbilities().setFlySpeed(0.05f);
 			mc.player.noClip = false;
 			mc.player.setNoGravity(false);

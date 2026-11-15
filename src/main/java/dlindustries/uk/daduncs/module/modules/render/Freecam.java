@@ -65,8 +65,18 @@ public final class Freecam extends Module implements TickListener, CameraUpdateL
 		eventManager.remove(TickListener.class, this);
 		eventManager.remove(CameraUpdateListener.class, this);
 
+		if (mc.options != null) {
+			mc.options.useKey.setPressed(false);
+			mc.options.attackKey.setPressed(false);
+			mc.options.forwardKey.setPressed(false);
+			mc.options.backKey.setPressed(false);
+			mc.options.leftKey.setPressed(false);
+			mc.options.rightKey.setPressed(false);
+			mc.options.jumpKey.setPressed(false);
+			mc.options.sneakKey.setPressed(false);
+		}
+
 		if (mc.world != null) {
-			mc.player.setVelocity(Vec3d.ZERO);
 			mc.worldRenderer.reload();
 		}
 		super.onDisable();

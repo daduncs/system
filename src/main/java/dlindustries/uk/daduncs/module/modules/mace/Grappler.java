@@ -187,7 +187,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 					return;
 				}
 
-				if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending()) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)) {
 					return;
 				}
 
@@ -306,7 +306,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 	}
 
 	private void fireWindCharge(boolean aligned) {
-		if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending()) {
+		if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)) {
 			return;
 		}
 

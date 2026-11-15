@@ -98,13 +98,16 @@ public final class AutoPearlPull extends Module implements TickListener {
 		if (!pull)
 			return;
 
-		if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending())
+		if (mc.currentScreen != null || mc.player.isUsingItem() || !AntibanbyDaduncs.canBlockActionNow() || AntibanbyDaduncs.isSlotPending())
 			return;
 
-		pull = false;
-
-		if (mc.crosshairTarget instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK)
-			WorldUtils.placeBlock(hit, true);
+		if (mc.crosshairTarget instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+			if (WorldUtils.placeBlock(hit, true)) {
+				pull = false;
+			}
+		} else {
+			pull = false;
+		}
 	}
 
 	private void listen() {

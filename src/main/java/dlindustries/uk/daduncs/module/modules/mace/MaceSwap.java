@@ -112,7 +112,7 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 	@Override
 	public void onEnable() {
 		List<String> disabled = new ArrayList<>();
-		for (Class<? extends Module> type : List.of(HitManager.class, AutoMaceV1.class)) {
+		for (Class<? extends Module> type : List.of(HitManager.class)) {
 			Module module = System.INSTANCE.getModuleManager().getModule(type);
 			if (module != null && module.isEnabled()) {
 				module.setEnabled(false);
@@ -214,6 +214,9 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 	}
 
 	private void processSwap(LivingEntity target) {
+		if (mc.player == null || mc.player.isUsingItem()) {
+			return;
+		}
 		if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
 			return;
 		}
@@ -223,14 +226,6 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 
 		int maceSlot = InventoryUtils.findMace(maceEnchantment, preferDensity);
 		if (maceSlot == -1) return;
-
-		if (mc.options.useKey.isPressed() || mc.player.isUsingItem()) {
-			mc.options.useKey.setPressed(false);
-			if (mc.interactionManager != null) {
-				mc.interactionManager.stopUsingItem(mc.player);
-			}
-			shouldUseAfterAttack = true;
-		}
 
 		if (!SlotManager.isOwnerActive(this)) {
 			int ticks = delay.getRandomValueInt();
@@ -319,19 +314,23 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 			return;
 		}
 
+		if (mc.player.isUsingItem()) {
+			return;
+		}
+
 		isSlamming = true;
 		try {
 			int ticks = Math.max(1, delay.getRandomValueInt());
 			if (SlotManager.swapToIfNeeded(this, maceSlot, inputSimulation.getValue(), ticks, switchBack.getValue(), this::restoreUseKeyIfNeeded)) {
-				if (mc.interactionManager != null && !AntibanbyDaduncs.isAttackSent() && !AntibanbyDaduncs.isMovementSent()) {
+				if (mc.interactionManager != null
+						&& mc.player.getInventory().getSelectedSlot() == maceSlot
+						&& !AntibanbyDaduncs.isSlotPending()
+						&& AntibanbyDaduncs.canAttackNow()) {
 					mc.interactionManager.attackEntity(mc.player, target);
 					mc.player.swingHand(Hand.MAIN_HAND);
 					actionSentThisTick = true;
+					pendingShieldBreakTarget = null;
 				}
-				if (inputSimulation.getValue()) {
-					MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-				}
-				pendingShieldBreakTarget = null;
 			}
 		} finally {
 			isSlamming = false;

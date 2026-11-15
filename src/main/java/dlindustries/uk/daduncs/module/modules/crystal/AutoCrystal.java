@@ -30,7 +30,9 @@ import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.bind;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.*;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -104,6 +106,8 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 	public void onDisable() {
 		eventManager.remove(TickListener.class, this);
 		eventManager.remove(ItemUseListener.class, this);
+		crystalling = false;
+		wasPressed = false;
 		antiWeaknessRestoreSlot = -1;
 		super.onDisable();
 	}
@@ -160,6 +164,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 		if (!isKeyDown) {
 
 			if (wasPressed) {
+				antiWeaknessRestoreSlot = -1;
 				if (mc.crosshairTarget instanceof EntityHitResult hit) {
 					attemptBreakEntity(hit, true);
 				}
@@ -168,7 +173,6 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 				breakTimer.reset();
 				crystalling = false;
 				wasPressed = false;
-				antiWeaknessRestoreSlot = -1;
 			}
 			return;
 		}
@@ -211,17 +215,20 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 						if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK))
 							return;
 
-						if (!AntibanbyDaduncs.isAttackSent() && !AntibanbyDaduncs.isSlotPending()) {
+						if (!canFakePunchBlock(hit.getBlockPos()))
+							return;
+
+						if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
 							if (clickSimulation.getValue()) {
-								if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK)) {
-									if (CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.getBlockPos()))
-										MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-								} else MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+								MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 							}
 
-							mc.interactionManager.attackBlock(hit.getBlockPos(), hit.getSide());
-							mc.player.swingHand(Hand.MAIN_HAND);
-							mc.interactionManager.updateBlockBreakingProgress(hit.getBlockPos(), hit.getSide());
+							boolean brokeOrProgressed = mc.interactionManager.isBreakingBlock()
+									? mc.interactionManager.updateBlockBreakingProgress(hit.getBlockPos(), hit.getSide())
+									: mc.interactionManager.attackBlock(hit.getBlockPos(), hit.getSide());
+							if (brokeOrProgressed) {
+								mc.player.swingHand(Hand.MAIN_HAND);
+							}
 
 							breakTimer.reset();
 						}
@@ -237,7 +244,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 			if (mc.crosshairTarget.getType() == HitResult.Type.MISS) {
 				if (fakePunch.getValue()) {
 					if (!dontBreak && randomInt <= breakChance.getValueInt()) {
-						if (!AntibanbyDaduncs.isAttackSent() && !AntibanbyDaduncs.isSlotPending()) {
+						if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
 							if (mc.interactionManager.hasLimitedAttackSpeed())
 								mc.attackCooldown = 10;
 
@@ -276,7 +283,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 		if (!fakePunch.getValue() && !(entity instanceof EndCrystalEntity || entity instanceof SlimeEntity))
 			return;
 
-		if (AntibanbyDaduncs.isBlockActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending() || AntibanbyDaduncs.isMovementSent())
+		if (!AntibanbyDaduncs.canAttackNow())
 			return;
 
 		int previousSlot = mc.player.getInventory().getSelectedSlot();
@@ -339,6 +346,30 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 				event.cancel();
 			}
 		}
+	}
+
+	private boolean canFakePunchBlock(net.minecraft.util.math.BlockPos pos) {
+		if (mc.world == null || mc.player == null)
+			return false;
+		if (mc.player.getMainHandStack().contains(DataComponentTypes.PIERCING_WEAPON))
+			return false;
+
+		BlockState state = mc.world.getBlockState(pos);
+		if (state.isAir()
+				|| state.isOf(Blocks.WATER)
+				|| state.isOf(Blocks.LAVA)
+				|| state.isOf(Blocks.BUBBLE_COLUMN)
+				|| state.isOf(Blocks.MOVING_PISTON)
+				|| state.isOf(Blocks.FIRE)
+				|| state.isOf(Blocks.SOUL_FIRE)) {
+			return false;
+		}
+		if (state.isOf(Blocks.LIGHT)
+				&& !mc.player.getMainHandStack().isOf(Items.LIGHT)
+				&& !mc.player.getOffHandStack().isOf(Items.LIGHT)) {
+			return false;
+		}
+		return state.getHardness(mc.world, pos) >= 0.0f;
 	}
 
 	private boolean friendNear() {

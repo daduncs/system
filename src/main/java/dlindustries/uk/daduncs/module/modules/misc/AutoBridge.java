@@ -2,15 +2,14 @@ package dlindustries.uk.daduncs.module.modules.misc;
 
 import dlindustries.uk.daduncs.event.events.HudListener;
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.imixin.IKeyBinding;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
-import dlindustries.uk.daduncs.mixin.KeyBindingAccessor;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.range;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.InventoryUtils;
-import dlindustries.uk.daduncs.utils.KeyUtils;
 import dlindustries.uk.daduncs.utils.RotationUtils;
 import dlindustries.uk.daduncs.utils.WorldUtils;
 import dlindustries.uk.daduncs.utils.rotation.Rotation;
@@ -84,7 +83,9 @@ public final class AutoBridge extends Module implements TickListener, HudListene
 		rotating = false;
 		aiming = false;
 
-		if (prevSlot != -1 && mc.player != null) InventoryUtils.setInvSlot(prevSlot);
+		if (prevSlot != -1 && mc.player != null && mc.currentScreen == null && !mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
+			InventoryUtils.setInvSlot(prevSlot);
+		}
 		prevSlot = -1;
 		super.onDisable();
 	}
@@ -158,11 +159,11 @@ public final class AutoBridge extends Module implements TickListener, HudListene
 
 		if (mc.player.getInventory().getSelectedSlot() != block) {
 			if (prevSlot == -1) prevSlot = mc.player.getInventory().getSelectedSlot();
-			if (!AntibanbyDaduncs.isActionSent()) InventoryUtils.setInvSlot(block);
+			if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) InventoryUtils.setInvSlot(block);
 			return;
 		}
 
-		if (wait > 0 || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) return;
+		if (wait > 0 || mc.player.isUsingItem() || !AntibanbyDaduncs.canBlockActionNow() || AntibanbyDaduncs.isSlotPending()) return;
 
 		BlockHitResult ray = ray();
 		if (ray == null || !ray.getBlockPos().equals(face.getBlockPos()) || ray.getSide() != face.getSide()) return;
@@ -260,7 +261,7 @@ public final class AutoBridge extends Module implements TickListener, HudListene
 	}
 
 	private void swapBack() {
-		if (prevSlot == -1 || AntibanbyDaduncs.isActionSent()) return;
+		if (prevSlot == -1 || mc.player == null || mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) return;
 
 		InventoryUtils.setInvSlot(prevSlot);
 		prevSlot = -1;
@@ -278,7 +279,9 @@ public final class AutoBridge extends Module implements TickListener, HudListene
 			mc.options.sneakKey.setPressed(true);
 			sneaking = true;
 		} else if (sneaking) {
-			mc.options.sneakKey.setPressed(KeyUtils.isKeyPressed(((KeyBindingAccessor) mc.options.sneakKey).getBoundKey().getCode()));
+			if (mc.options != null) {
+				((IKeyBinding) mc.options.sneakKey).resetPressed();
+			}
 			sneaking = false;
 		}
 	}

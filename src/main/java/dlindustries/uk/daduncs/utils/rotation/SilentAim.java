@@ -83,8 +83,9 @@ public final class SilentAim {
 		float delta = deltaSeconds();
 		float[] client = {mc.player.getYaw(), mc.player.getPitch()};
 
-		lastRotations[0] = lerpAngle(lastRotations[0], client[0], delta, yawSpeed * 2.5f);
-		lastRotations[1] = lerpAngle(lastRotations[1], client[1], delta, pitchSpeed * 2.5f);
+		float targetYaw = lerpAngle(lastRotations[0], client[0], delta, yawSpeed * 2.5f);
+		float targetPitch = lerpAngle(lastRotations[1], client[1], delta, pitchSpeed * 2.5f);
+		lastRotations = fixed(lastRotations, new float[]{targetYaw, targetPitch});
 
 		float yawDiff = Math.abs(MathHelper.wrapDegrees(lastRotations[0] - client[0]));
 		float pitchDiff = Math.abs(lastRotations[1] - client[1]);
@@ -128,10 +129,17 @@ public final class SilentAim {
 	}
 
 	private static void initFromPlayer() {
-		lastRotations[0] = mc.player.getYaw();
-		lastRotations[1] = mc.player.getPitch();
-		lastSentRotations[0] = mc.player.getYaw();
-		lastSentRotations[1] = mc.player.getPitch();
+		float startYaw = dlindustries.uk.daduncs.managers.AntibanbyDaduncs.hasSentRotation()
+				? dlindustries.uk.daduncs.managers.AntibanbyDaduncs.getLastSentYaw()
+				: mc.player.getYaw();
+		float startPitch = dlindustries.uk.daduncs.managers.AntibanbyDaduncs.hasSentRotation()
+				? dlindustries.uk.daduncs.managers.AntibanbyDaduncs.getLastSentPitch()
+				: mc.player.getPitch();
+		startPitch = MathHelper.clamp(startPitch, -90f, 90f);
+		lastRotations[0] = startYaw;
+		lastRotations[1] = startPitch;
+		lastSentRotations[0] = startYaw;
+		lastSentRotations[1] = startPitch;
 		gcdYawRemainder = 0f;
 		gcdPitchRemainder = 0f;
 	}
@@ -176,14 +184,14 @@ public final class SilentAim {
 		float gcd = f * f * f * 1.2f;
 
 		float yaw = gcdYawRemainder + MathHelper.wrapDegrees(rotations[0] - last[0]);
-		float pitch = gcdPitchRemainder + MathHelper.wrapDegrees(rotations[1] - last[1]);
-		float snappedYaw = gcd <= 0f ? yaw : (int) (yaw / gcd) * gcd;
-		float snappedPitch = gcd <= 0f ? pitch : (int) (pitch / gcd) * gcd;
+		float pitch = gcdPitchRemainder + (rotations[1] - last[1]);
+		float snappedYaw = gcd <= 1e-6f ? yaw : Math.round(yaw / gcd) * gcd;
+		float snappedPitch = gcd <= 1e-6f ? pitch : Math.round(pitch / gcd) * gcd;
 
 		gcdYawRemainder = MathHelper.wrapDegrees(yaw - snappedYaw);
 		gcdPitchRemainder = pitch - snappedPitch;
 
-		return new float[]{last[0] + snappedYaw, last[1] + snappedPitch};
+		return new float[]{last[0] + snappedYaw, MathHelper.clamp(last[1] + snappedPitch, -90f, 90f)};
 	}
 
 	private static float[] continuity(float[] last, float[] target) {

@@ -25,9 +25,11 @@ import dlindustries.uk.daduncs.event.events.PacketReceiveListener;
 import dlindustries.uk.daduncs.event.events.PacketSendListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
 import dlindustries.uk.daduncs.managers.Recorder;
+import io.netty.channel.ChannelFutureListener;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.network.packet.Packet;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -38,6 +40,8 @@ public class ClientConnectionMixin {
 
 	@Inject(method = "handlePacket", at = @At("HEAD"), cancellable = true)
 	private static <T extends PacketListener> void onPacketReceive(Packet<T> packet, PacketListener listener, CallbackInfo ci) {
+		AntibanbyDaduncs.onPacketReceive(packet);
+
 		Recorder tm = Recorder.getInstance();
 		if (tm != null) {
 			tm.recordPacketReceive(packet);
@@ -49,8 +53,8 @@ public class ClientConnectionMixin {
 		if (event.isCancelled()) ci.cancel();
 	}
 
-	@Inject(method = "send(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
-	private void onPacketSend(Packet<?> packet, CallbackInfo ci) {
+	@Inject(method = "send(Lnet/minecraft/network/packet/Packet;Lio/netty/channel/ChannelFutureListener;Z)V", at = @At("HEAD"), cancellable = true)
+	private void onPacketSend(Packet<?> packet, @Nullable ChannelFutureListener callback, boolean flush, CallbackInfo ci) {
 		if (AntibanbyDaduncs.filterPacket(packet)) {
 			ci.cancel();
 			return;

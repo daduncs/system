@@ -150,7 +150,10 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 
 	@Override
 	public void onTick() {
-		if (mc.currentScreen != null)
+		if (mc.player == null || mc.world == null || mc.currentScreen != null)
+			return;
+
+		if (mc.player.isUsingItem())
 			return;
 
 		if (((mc.player.getMainHandStack().getItem().getComponents().contains(DataComponentTypes.FOOD) || mc.player.getMainHandStack().getItem() instanceof ShieldItem || mc.player.getOffHandStack().getItem() instanceof ShieldItem || mc.player.getOffHandStack().getItem().getComponents().contains(DataComponentTypes.FOOD)) && GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS) && whileUse.getValue())
@@ -312,12 +315,13 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 										if (tm != null) {
 											tm.recordModuleEvent("AnchorMacro", "AIRPLACE_DOUBLE_ANCHOR", "DoubleAnchor.doAirplace at " + hit.getBlockPos().toShortString(), null);
 										}
-										DoubleAnchor.doAirplace(hit);
-										lastExplodedPos = targetPos;
-										ownedAnchors.add(targetPos);
-										airplacedAnchors.add(targetPos);
-										airplacedTimestamps.put(targetPos, java.lang.System.currentTimeMillis());
-										airplaceDamageWindowCleared.remove(targetPos);
+										if (DoubleAnchor.doAirplace(hit)) {
+											lastExplodedPos = targetPos;
+											ownedAnchors.add(targetPos);
+											airplacedAnchors.add(targetPos);
+											airplacedTimestamps.put(targetPos, java.lang.System.currentTimeMillis());
+											airplaceDamageWindowCleared.remove(targetPos);
+										}
 									} else {
 										if (tm != null) {
 											tm.recordModuleEvent("AnchorMacro", "EXPLODE_ANCHOR", "WorldUtils.placeBlock at " + hit.getBlockPos().toShortString() + " with slot=" + targetSlot, null);

@@ -85,12 +85,13 @@ public final class AutoXP extends Module implements TickListener, ItemUseListene
 		if (dontThrow)
 			clock--;
 
-		if (!dontThrow && randomInt <= chance.getValueInt() && !AntibanbyDaduncs.isAttackSent() && !AntibanbyDaduncs.isSlotPending()) {
-			if (clickSimulation.getValue())
-				MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-
+		if (!dontThrow && randomInt <= chance.getValueInt() && !mc.player.isUsingItem() && AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) && !AntibanbyDaduncs.isSlotPending()) {
 			ActionResult result = mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
-			if (result.isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
+			if (result.isAccepted()) {
+				mc.player.swingHand(Hand.MAIN_HAND);
+				if (clickSimulation.getValue())
+					MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+			}
 
 			clock = delay.getValueInt();
 		}

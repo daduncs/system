@@ -27,6 +27,7 @@ import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bind;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
+import dlindustries.uk.daduncs.utils.InventoryUtils;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.ingame.AnvilScreen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
@@ -65,6 +66,7 @@ public final class UtilitySwapper extends Module implements TickListener {
 
     private int switchTimer = 0;
     private int pickupTimer = 0;
+    private boolean pendingClose = false;
 
     public UtilitySwapper() {
         super(EncryptedString.of("Utility Swapper"),
@@ -79,6 +81,7 @@ public final class UtilitySwapper extends Module implements TickListener {
         eventManager.add(TickListener.class, this);
         switchTimer = 0;
         pickupTimer = 0;
+        pendingClose = false;
         isSwapping = false;
         super.onEnable();
     }
@@ -86,14 +89,27 @@ public final class UtilitySwapper extends Module implements TickListener {
     @Override
     public void onDisable() {
         eventManager.remove(TickListener.class, this);
-        mc.options.useKey.setPressed(false);
+        if (mc.options != null) {
+            mc.options.useKey.setPressed(false);
+        }
+        pendingClose = false;
         isSwapping = false;
         super.onDisable();
     }
 
     @Override
     public void onTick() {
-        if (mc.player == null || mc.world == null) return;
+        if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
+
+        if (pendingClose) {
+            pendingClose = false;
+            if (mc.currentScreen instanceof InventoryScreen) {
+                mc.player.closeHandledScreen();
+                mc.setScreen(null);
+            }
+            isSwapping = false;
+            return;
+        }
 
         if (!isScreenSafe()) {
             isSwapping = false;
@@ -111,6 +127,8 @@ public final class UtilitySwapper extends Module implements TickListener {
         } else if (axePressed) {
             if (mc.player.isUsingItem() && mc.player.getActiveItem().getItem() instanceof ShieldItem) {
                 mc.options.useKey.setPressed(false);
+                mc.interactionManager.stopUsingItem(mc.player);
+                return;
             }
             handleAxe();
         } else {
@@ -123,7 +141,9 @@ public final class UtilitySwapper extends Module implements TickListener {
 
     private void handleShield() {
         if (mc.player.getOffHandStack().getItem() == Items.SHIELD) {
-            mc.options.useKey.setPressed(true);
+            if (mc.currentScreen == null) {
+                mc.options.useKey.setPressed(true);
+            }
             return;
         }
 
@@ -131,8 +151,11 @@ public final class UtilitySwapper extends Module implements TickListener {
 
         if (shieldInHotbar != -1) {
             if (mc.player.getInventory().getSelectedSlot() != shieldInHotbar) {
-                if (mc.currentScreen == null && switchTimer <= 0) {
-                    mc.player.getInventory().setSelectedSlot(shieldInHotbar);
+                if (mc.currentScreen == null && switchTimer <= 0
+                        && !mc.player.isUsingItem()
+                        && AntibanbyDaduncs.canSwapSlotNow()
+                        && !AntibanbyDaduncs.isSlotPending()) {
+                    InventoryUtils.setInvSlot(shieldInHotbar);
                     switchTimer = slotSwitchDelay.getValueInt();
                 }
             } else {
@@ -157,22 +180,36 @@ public final class UtilitySwapper extends Module implements TickListener {
     }
 
     private void invSwap(Predicate<ItemStack> itemFinder) {
-        if (mc.player == null) return;
+        if (mc.player == null || mc.interactionManager == null) return;
 
         if (!(mc.currentScreen instanceof InventoryScreen)) {
             if (!isSwapping) {
+                if (mc.player.isUsingItem()) {
+                    mc.options.useKey.setPressed(false);
+                    mc.interactionManager.stopUsingItem(mc.player);
+                    return;
+                }
                 if (mc.player.isSprinting()) {
                     mc.player.setSprinting(false);
+                    return;
+                }
+                if (mc.player.isSneaking() || AntibanbyDaduncs.isActionSent()) {
+                    return;
                 }
                 isSwapping = true;
                 mc.setScreen(new InventoryScreen(mc.player));
-                pickupTimer = itemPickupDelay.getValueInt();
+                pickupTimer = Math.max(1, itemPickupDelay.getValueInt());
             }
             return;
         }
 
         if (mc.player.isSprinting()) {
             mc.player.setSprinting(false);
+            return;
+        }
+
+        if (mc.player.isSneaking() || mc.player.isUsingItem()) {
+            return;
         }
 
         if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
@@ -200,11 +237,11 @@ public final class UtilitySwapper extends Module implements TickListener {
                     mc.player
             );
 
-            mc.currentScreen.close();
-            isSwapping = false;
+            pendingClose = true;
             switchTimer = slotSwitchDelay.getValueInt();
         } else {
-            mc.currentScreen.close();
+            mc.player.closeHandledScreen();
+            mc.setScreen(null);
             isSwapping = false;
         }
     }

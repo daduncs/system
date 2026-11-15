@@ -32,6 +32,7 @@ import dlindustries.uk.daduncs.managers.ProfileManager;
 import dlindustries.uk.daduncs.managers.Recorder;
 import dlindustries.uk.daduncs.module.ModuleManager;
 import dlindustries.uk.daduncs.utils.rotation.RotatorManager;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 
@@ -53,7 +54,8 @@ public final class System {
 	public Recorder recorder;
 	public dlindustries.uk.daduncs.managers.UpdateManager updateManager;
 	public static MinecraftClient mc;
-	public String version = " b2.0";
+	public final String version = FabricLoader.getInstance().getModContainer("marlowcrystal")
+			.orElseThrow().getMetadata().getCustomValue("system:version").getAsString();
 	public static boolean BETA;
 	public static System INSTANCE;
 	public boolean guiInitialized;

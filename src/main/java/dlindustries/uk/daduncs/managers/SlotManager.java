@@ -21,6 +21,7 @@
 package dlindustries.uk.daduncs.managers;
 
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.imixin.IKeyBinding;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.utils.InventoryUtils;
 import net.minecraft.client.option.KeyBinding;
@@ -35,6 +36,7 @@ public final class SlotManager implements TickListener {
     public static final SlotManager INSTANCE = new SlotManager();
 
     private static final Deque<SwapState> stack = new ArrayDeque<>();
+    private static KeyBinding pressedHotbarKey;
 
     private SlotManager() {}
 
@@ -164,13 +166,19 @@ public final class SlotManager implements TickListener {
     }
 
     public static void clear() {
+        releasePressedHotbarKey();
         stack.clear();
     }
 
     @Override
     public void onTick() {
+        releasePressedHotbarKey();
         if (mc.player == null) {
             clear();
+            return;
+        }
+
+        if (mc.currentScreen != null) {
             return;
         }
 
@@ -178,7 +186,7 @@ public final class SlotManager implements TickListener {
             SwapState state = stack.peek();
             if (mc.player.age < state.restoreTick) break;
 
-            if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+            if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
                 break;
             }
 
@@ -197,7 +205,7 @@ public final class SlotManager implements TickListener {
         SwapState root = stack.peekLast();
         if (root == null) root = fallbackRoot;
 
-        if (root != null && mc.player != null) {
+        if (root != null && mc.player != null && mc.currentScreen == null) {
             setInvSlot(root.rootSlot, root.rootInputSimulation);
         }
 
@@ -210,7 +218,7 @@ public final class SlotManager implements TickListener {
     private static void endState(SwapState state, boolean restore, boolean forceRestore) {
         if (state == null) return;
 
-        if (restore && mc.player != null && (forceRestore || state.restoreOnEnd)) {
+        if (restore && mc.player != null && mc.currentScreen == null && (forceRestore || state.restoreOnEnd)) {
             setInvSlot(state.rootSlot, state.rootInputSimulation);
         }
 
@@ -225,16 +233,25 @@ public final class SlotManager implements TickListener {
         }
     }
 
+    private static void releasePressedHotbarKey() {
+        if (pressedHotbarKey != null) {
+            ((IKeyBinding) pressedHotbarKey).resetPressed();
+            pressedHotbarKey = null;
+        }
+    }
+
     public static void setInvSlot(int slot, boolean inputSimulation) {
-        if (slot < 0 || slot > 8 || mc.player == null) return;
+        if (slot < 0 || slot > 8 || mc.player == null || mc.currentScreen != null) return;
 
         if (mc.player.getInventory().getSelectedSlot() == slot) return;
 
+        releasePressedHotbarKey();
         if (inputSimulation) {
             if (mc.options != null && mc.options.hotbarKeys != null && slot < mc.options.hotbarKeys.length) {
                 KeyBinding key = mc.options.hotbarKeys[slot];
                 if (key != null) {
                     key.setPressed(true);
+                    pressedHotbarKey = key;
                 }
             }
         }

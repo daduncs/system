@@ -76,6 +76,7 @@ public final class Prevent extends Module implements ItemUseListener, AttackList
 
 	@Override
 	public void onAttack(AttackEvent event) {
+		if (mc.player == null || mc.crosshairTarget == null) return;
 		if (mc.crosshairTarget instanceof BlockHitResult hit) {
 			if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) && obiPunch.getValue() && mc.player.isHolding(Items.END_CRYSTAL))
 				event.cancel();
@@ -84,6 +85,7 @@ public final class Prevent extends Module implements ItemUseListener, AttackList
 
 	@Override
 	public void onBlockBreaking(BlockBreakingEvent event) {
+		if (mc.player == null || mc.crosshairTarget == null) return;
 		if (mc.crosshairTarget instanceof BlockHitResult hit) {
 			if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) && obiPunch.getValue() && mc.player.isHolding(Items.END_CRYSTAL))
 				event.cancel();
@@ -92,6 +94,7 @@ public final class Prevent extends Module implements ItemUseListener, AttackList
 
 	@Override
 	public void onItemUse(ItemUseEvent event) {
+		if (mc.player == null || mc.crosshairTarget == null) return;
 		if (mc.crosshairTarget instanceof BlockHitResult hit) {
 			if (antiExplode.getValue()
 					&& BlockUtils.isBlock(hit.getBlockPos(), Blocks.RESPAWN_ANCHOR)

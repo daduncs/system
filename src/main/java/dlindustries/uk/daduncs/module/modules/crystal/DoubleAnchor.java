@@ -63,21 +63,26 @@ public final class DoubleAnchor extends Module implements TickListener {
 		if (mc.player == null || mc.interactionManager == null || hit == null) {
 			return false;
 		}
-		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isSlotPending() || dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()) {
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isSlotPending()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isActionSent()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isMovementSent()
+				|| !dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canBlockActionNow()) {
 			return false;
 		}
-		if (!mc.player.getMainHandStack().isOf(Items.RESPAWN_ANCHOR)) {
+		if (mc.player.isUsingItem() || !mc.player.getMainHandStack().isOf(Items.RESPAWN_ANCHOR)) {
 			return false;
 		}
 
+		// Two identical interacts in one tick (same pos/face/cursor), exactly like a vanilla
+		// double-click processed in the same tick: r1 explodes the charged anchor server-side,
+		// r2 lands on the now-air position and places the new anchor there (airplace).
 		ActionResult r1 = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-
 		ActionResult r2 = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
-
 		if (r1.isAccepted() || r2.isAccepted()) {
 			mc.player.swingHand(Hand.MAIN_HAND);
+			return true;
 		}
-		return true;
+		return false;
 	}
 
 	@Override

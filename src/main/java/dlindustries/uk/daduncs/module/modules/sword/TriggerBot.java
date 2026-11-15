@@ -30,7 +30,6 @@ import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.modules.client.Friends;
-import dlindustries.uk.daduncs.module.modules.mace.AutoMaceV1;
 import dlindustries.uk.daduncs.module.modules.mace.MaceSwap;
 import dlindustries.uk.daduncs.module.modules.crystal.HitManager;
 import dlindustries.uk.daduncs.module.setting.bool;
@@ -125,12 +124,6 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 
 	@Override
 	public void onEnable() {
-		AutoMaceV1 autoMace = System.INSTANCE.getModuleManager().getModule(AutoMaceV1.class);
-		if (autoMace != null && autoMace.isEnabled()) {
-			autoMace.setEnabled(false);
-			Notice.show("AutoMace was turned off to not interfere with the Trigger Bot");
-		}
-
 		currentDelay = swordDelay.getRandomValueInt();
 		eventManager.add(TickListener.class, this);
 		eventManager.add(AttackListener.class, this);
@@ -150,7 +143,7 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 	@Override
 	public void onTick() {
 		try {
-			if (!inScreen.getValue() && mc.currentScreen != null) return;
+			if (mc.currentScreen != null || mc.player.isSpectator()) return;
 
 			HitManager hitManager = HitManager.getInstance();
 			if (hitManager != null && hitManager.isEnabled() && hitManager.isSlamActive()) {
@@ -167,7 +160,12 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 			boolean isSword = mainHandStack.isIn(ItemTags.SWORDS);
 			boolean isAxe = mainHandStack.isIn(ItemTags.AXES);
 			boolean isMace = mainHandStack.isOf(Items.MACE);
-			boolean isOther = !isSword && !isAxe && !isMace;
+			boolean isSpear = mainHandStack.contains(DataComponentTypes.PIERCING_WEAPON);
+			boolean isOther = !isSword && !isAxe && !isMace && !isSpear;
+
+			if (isSpear) {
+				return;
+			}
 
 			if ((isSword && !enableSwords.getValue()) ||
 					(isAxe && !enableAxes.getValue()) ||
@@ -229,7 +227,7 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 
 	private void handleAttack(range delaySetting, boolean isMace, boolean enforceCrit) {
 
-		if (AntibanbyDaduncs.isSlotPending() || AntibanbyDaduncs.isBlockActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isMovementSent()) {
+		if (!AntibanbyDaduncs.canAttackNow()) {
 			return;
 		}
 
@@ -263,8 +261,7 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 			maxReach -= Math.min(0.20, horizSpeed * 0.6);
 		}
 
-		java.util.Optional<Vec3d> rayHit = entity.getBoundingBox().raycast(eyePos, eyePos.add(lookVec.multiply(maxReach)));
-		if (rayHit.isEmpty()) {
+		if (!WorldUtils.doesRaycastHitEntity(mc.player, entity, maxReach)) {
 			return;
 		}
 
@@ -275,13 +272,14 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 		}
 
 		if (timer.delay(currentDelay)) {
-			if (useShield.getValue() && mc.player.getOffHandStack().isOf(Items.SHIELD) && mc.player.isBlocking()) {
+			if (mc.player.isUsingItem()) {
 				if (mc.interactionManager != null) {
 					mc.interactionManager.stopUsingItem(mc.player);
 				}
-				MouseSimulation.mouseRelease(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-			} else if (mc.player.isUsingItem() && mc.interactionManager != null) {
-				mc.interactionManager.stopUsingItem(mc.player);
+				if (useShield.getValue() && mc.player.getOffHandStack().isOf(Items.SHIELD)) {
+					MouseSimulation.mouseRelease(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+				}
+				return;
 			}
 
 			HitManager hitManager = HitManager.getInstance();
@@ -294,14 +292,14 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 				maceSwap.handleAttack(entity);
 			}
 
+			if (!AntibanbyDaduncs.canAttackNow()) {
+				return;
+			}
+
 			boolean holdingMace = isMace || (maceSwap != null && maceSwap.isEnabled() && maceSwap.isSwapActive());
 			if (holdingMace) isMaceAttack = true;
 
-			WorldUtils.hitEntity(entity, swing.getValue());
-
-			if (clickSimulation.getValue()) {
-				MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-			}
+			WorldUtils.hitEntity(entity, true);
 
 			if (holdingMace) isMaceAttack = false;
 

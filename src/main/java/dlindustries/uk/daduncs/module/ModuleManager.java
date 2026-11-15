@@ -106,14 +106,9 @@ public final class ModuleManager implements ButtonListener {
 		add(new Nametags());
 		add(new PopFx());
 
-		add(new AutoMaceV1());
 		add(new MaceSwap());
 		add(new Grappler());
-		add(new ElytraSwapV2());
 
-		add(new AutoCart());
-		add(new AutoCartV2());
-		add(new CrossbowCart());
 		add(new InvCart());
 
 		add(new SpearLunge());

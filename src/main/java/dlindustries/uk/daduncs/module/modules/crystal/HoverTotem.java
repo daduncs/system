@@ -21,7 +21,6 @@
 package dlindustries.uk.daduncs.module.modules.crystal;
 
 import dlindustries.uk.daduncs.event.events.ButtonListener;
-import dlindustries.uk.daduncs.event.events.MouseUpdateListener;
 import dlindustries.uk.daduncs.event.events.TickListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
 import dlindustries.uk.daduncs.mixin.HandledScreenMixin;
@@ -32,6 +31,7 @@ import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
 import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
+import dlindustries.uk.daduncs.utils.InventoryUtils;
 import dlindustries.uk.daduncs.utils.TimerUtils;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.InputUtil;
@@ -43,7 +43,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
 
-public final class HoverTotem extends Module implements TickListener, ButtonListener, MouseUpdateListener {
+public final class HoverTotem extends Module implements TickListener, ButtonListener {
 	private final number delay = new number(EncryptedString.of("Delay"), 0, 20, 0, 1);
 	private final bool hotbar = new bool(EncryptedString.of("Hotbar"), true)
 			.setDescription(EncryptedString.of("Puts a totem in your hotbar as well, if enabled (Setting below will work if this is enabled)"));
@@ -71,7 +71,6 @@ public final class HoverTotem extends Module implements TickListener, ButtonList
 	public void onEnable() {
 		eventManager.add(TickListener.class, this);
 		eventManager.add(ButtonListener.class, this);
-		eventManager.add(MouseUpdateListener.class, this);
 		resetState();
 		super.onEnable();
 	}
@@ -80,7 +79,6 @@ public final class HoverTotem extends Module implements TickListener, ButtonList
 	public void onDisable() {
 		eventManager.remove(TickListener.class, this);
 		eventManager.remove(ButtonListener.class, this);
-		eventManager.remove(MouseUpdateListener.class, this);
 		resetState();
 		super.onDisable();
 	}
@@ -115,11 +113,6 @@ public final class HoverTotem extends Module implements TickListener, ButtonList
 		processHoverLogic();
 	}
 
-	@Override
-	public void onMouseUpdate() {
-		processHoverLogic();
-	}
-
 	private void processHoverLogic() {
 		if (mc.player == null || mc.world == null || mc.interactionManager == null) {
 			resetState();
@@ -137,13 +130,11 @@ public final class HoverTotem extends Module implements TickListener, ButtonList
 
 		if (mc.player.isSprinting()) {
 			mc.player.setSprinting(false);
+			return;
 		}
 
-		if (autoSwitch.getValue()) {
-			int targetSlot = slot.getValueInt() - 1;
-			if (mc.player.getInventory().getSelectedSlot() != targetSlot) {
-				mc.player.getInventory().setSelectedSlot(targetSlot);
-			}
+		if (mc.player.isSneaking() || mc.player.isUsingItem() || hasActiveMovementInput()) {
+			return;
 		}
 
 		Slot hoveredSlot = ((HandledScreenMixin) inv).getFocusedSlot();
@@ -196,11 +187,18 @@ public final class HoverTotem extends Module implements TickListener, ButtonList
 		}
 	}
 
+	private boolean hasActiveMovementInput() {
+		if (mc.player == null || mc.player.input == null || mc.player.input.playerInput == null) return false;
+		var pi = mc.player.input.playerInput;
+		return pi.forward() || pi.backward() || pi.left() || pi.right() || pi.jump() || pi.sneak();
+	}
+
 	private void switchBeforeOpen() {
-		if (mc.player == null || mc.interactionManager == null) return;
+		if (mc.player == null || mc.interactionManager == null || mc.currentScreen != null) return;
+		if (!AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) return;
 		int targetSlot = slot.getValueInt() - 1;
 		if (mc.player.getInventory().getSelectedSlot() != targetSlot) {
-			mc.player.getInventory().setSelectedSlot(targetSlot);
+			InventoryUtils.setInvSlot(targetSlot);
 		}
 		if (mc.player.isSprinting()) {
 			mc.player.setSprinting(false);

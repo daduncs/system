@@ -33,6 +33,7 @@ import dlindustries.uk.daduncs.utils.InventoryUtils;
 import dlindustries.uk.daduncs.utils.KeyUtils;
 import dlindustries.uk.daduncs.utils.TimerUtils;
 
+import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 
 public final class FireworkMacro extends Module implements TickListener {
@@ -140,20 +141,24 @@ public final class FireworkMacro extends Module implements TickListener {
 
         switch (state) {
             case SWITCHING:
-                if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+                if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
                     return;
                 }
                 InventoryUtils.setInvSlot(fireworkSlot.getValueInt() - 1);
                 state = SequenceState.USING;
-                currentStepDelayMs = randomDelay();
+                currentStepDelayMs = Math.max(50L, randomDelay());
                 delayTimer.reset();
                 break;
 
             case USING:
-                if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending()) {
+                if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
                     return;
                 }
-                mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+                if (mc.player.getMainHandStack().isOf(Items.FIREWORK_ROCKET)) {
+                    if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
+                        mc.player.swingHand(Hand.MAIN_HAND);
+                    }
+                }
                 if (switchBack.getValue()) {
                     state = SequenceState.SWITCHING_BACK;
                     currentStepDelayMs = Math.max(50L, randomDelay());
@@ -164,7 +169,7 @@ public final class FireworkMacro extends Module implements TickListener {
                 break;
 
             case SWITCHING_BACK:
-                if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+                if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
                     return;
                 }
                 if (switchBack.getValue() && originalSlot != -1) {

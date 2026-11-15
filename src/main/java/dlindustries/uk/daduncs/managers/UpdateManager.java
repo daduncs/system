@@ -25,6 +25,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dlindustries.uk.daduncs.System;
+import net.fabricmc.loader.api.SemanticVersion;
+import net.fabricmc.loader.api.VersionParsingException;
 import net.minecraft.util.Util;
 
 import java.net.URI;
@@ -44,19 +46,18 @@ public final class UpdateManager {
 	public static final String DISCORD_INVITE = "https://discord.gg/kP8Mj4BPXv";
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final String RELEASES_PAGE = "https://github.com/daduncs/system/releases";
 
-	private String latestReleaseTag = "";
-	private String latestReleaseTitle = "";
-	private String latestReleaseUrl = "https://github.com/daduncs/system/releases";
-	private String latestReleaseDownloadUrl = "";
+	private record Release(String version, String downloadUrl, boolean updateAvailable) {}
 
-	private boolean fetched = false;
-	private boolean loading = false;
+	private volatile Release latestRelease = new Release("", RELEASES_PAGE, false);
+	private volatile boolean fetched = false;
+	private volatile boolean loading = false;
 
 	public UpdateManager() {
 	}
 
-	public void fetchAsync() {
+	public synchronized void fetchAsync() {
 		if (loading) return;
 		loading = true;
 
@@ -79,32 +80,47 @@ public final class UpdateManager {
 				if (relResp.statusCode() == 200 && relResp.body() != null && !relResp.body().isBlank()) {
 					JsonObject relJson = GSON.fromJson(relResp.body(), JsonObject.class);
 					if (relJson != null) {
-						if (relJson.has("tag_name") && !relJson.get("tag_name").isJsonNull()) {
-							this.latestReleaseTag = relJson.get("tag_name").getAsString();
-						}
-						if (relJson.has("name") && !relJson.get("name").isJsonNull()) {
-							this.latestReleaseTitle = relJson.get("name").getAsString();
-						}
-						if (relJson.has("html_url") && !relJson.get("html_url").isJsonNull()) {
-							this.latestReleaseUrl = relJson.get("html_url").getAsString();
-						}
-						if (relJson.has("assets") && relJson.get("assets").isJsonArray()) {
-							JsonArray assets = relJson.getAsJsonArray("assets");
-							if (!assets.isEmpty() && assets.get(0).isJsonObject()) {
-								JsonObject firstAsset = assets.get(0).getAsJsonObject();
-								if (firstAsset.has("browser_download_url") && !firstAsset.get("browser_download_url").isJsonNull()) {
-									this.latestReleaseDownloadUrl = firstAsset.get("browser_download_url").getAsString();
-								}
-							}
-						}
+						latestRelease = readRelease(relJson);
 					}
 				}
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
 			} catch (Exception ignored) {
 			} finally {
-				loading = false;
 				fetched = true;
+				loading = false;
 			}
 		});
+	}
+
+	private static Release readRelease(JsonObject json) {
+		String tag = readString(json, "tag_name");
+		String version = tag.isEmpty() ? readString(json, "name") : tag;
+		String downloadUrl = readString(json, "html_url");
+		if (json.has("assets") && json.get("assets").isJsonArray()) {
+			JsonArray assets = json.getAsJsonArray("assets");
+			if (!assets.isEmpty() && assets.get(0).isJsonObject()) {
+				String assetUrl = readString(assets.get(0).getAsJsonObject(), "browser_download_url");
+				if (!assetUrl.isEmpty()) downloadUrl = assetUrl;
+			}
+		}
+		String current = System.INSTANCE == null ? "" : System.INSTANCE.getVersion();
+		return new Release(version, downloadUrl.isEmpty() ? RELEASES_PAGE : downloadUrl,
+				isNewerVersion(current, tag));
+	}
+
+	private static String readString(JsonObject json, String key) {
+		return json.has(key) && json.get(key).isJsonPrimitive() ? json.get(key).getAsString().strip() : "";
+	}
+
+	static boolean isNewerVersion(String current, String tag) {
+		try {
+			SemanticVersion installed = SemanticVersion.parse(current.strip().replaceFirst("(?i)^[vb]+", ""));
+			SemanticVersion published = SemanticVersion.parse(tag.strip().replaceFirst("(?i)^[vb]+", ""));
+			return published.compareTo(installed) > 0;
+		} catch (VersionParsingException ignored) {
+			return false;
+		}
 	}
 
 	public void openUrl(String url) {
@@ -116,22 +132,7 @@ public final class UpdateManager {
 	}
 
 	public boolean hasUpdate() {
-		if (!fetched || latestReleaseTag.isEmpty()) return false;
-		if (System.INSTANCE == null || System.INSTANCE.version == null) return false;
-		String current = System.INSTANCE.version.trim();
-		if (current.isEmpty()) return false;
-
-		boolean equalsTag = current.equalsIgnoreCase(latestReleaseTag.trim());
-		boolean equalsTitle = !latestReleaseTitle.isEmpty() && current.equalsIgnoreCase(latestReleaseTitle.trim());
-
-		String cleanCurrent = current.replaceAll("^[vVbB\\s]+", "");
-		String cleanTag = latestReleaseTag.replaceAll("^[vVbB\\s]+", "");
-		String cleanTitle = latestReleaseTitle.replaceAll("^[vVbB\\s]+", "");
-
-		boolean equalsCleanTag = !cleanTag.isEmpty() && cleanCurrent.equalsIgnoreCase(cleanTag);
-		boolean equalsCleanTitle = !cleanTitle.isEmpty() && cleanCurrent.equalsIgnoreCase(cleanTitle);
-
-		return !(equalsTag || equalsTitle || equalsCleanTag || equalsCleanTitle);
+		return latestRelease.updateAvailable();
 	}
 
 	public boolean hasUnread() {
@@ -151,13 +152,11 @@ public final class UpdateManager {
 	}
 
 	public String getLatestVersion() {
-		return !latestReleaseTag.isEmpty() ? latestReleaseTag : (!latestReleaseTitle.isEmpty() ? latestReleaseTitle : "");
+		return latestRelease.version();
 	}
 
 	public String getDownloadUrl() {
-		if (!latestReleaseDownloadUrl.isEmpty()) return latestReleaseDownloadUrl;
-		if (!latestReleaseUrl.isEmpty()) return latestReleaseUrl;
-		return "https://github.com/daduncs/system/releases";
+		return latestRelease.downloadUrl();
 	}
 
 	public List<?> getBlocks() {

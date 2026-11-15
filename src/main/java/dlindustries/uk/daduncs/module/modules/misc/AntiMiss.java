@@ -60,6 +60,8 @@ public final class AntiMiss extends Module implements AttackListener, BlockBreak
 
 	@Override
 	public void onAttack(AttackEvent event) {
+		if (mc.player == null || mc.crosshairTarget == null)
+			return;
 		if (onlyWeapon.getValue() && !WorldUtils.isWeapon(mc.player.getMainHandStack()))
 			return;
 
@@ -75,6 +77,8 @@ public final class AntiMiss extends Module implements AttackListener, BlockBreak
 
 	@Override
 	public void onBlockBreaking(BlockBreakingEvent event) {
+		if (mc.player == null || mc.crosshairTarget == null)
+			return;
 		if (onlyWeapon.getValue() && !WorldUtils.isWeapon(mc.player.getMainHandStack()))
 			return;
 

@@ -28,10 +28,15 @@ import dlindustries.uk.daduncs.utils.EncryptedString;
 import net.minecraft.network.packet.c2s.common.KeepAliveC2SPacket;
 import net.minecraft.network.packet.s2c.common.KeepAliveS2CPacket;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 public final class PingSpoof extends Module implements PacketReceiveListener {
 	private final range ping = new range(EncryptedString.of("Ping"), 0, 1000, 1, 0, 600)
 			.setDescription(EncryptedString.of("The ping you want to achieve"));
 
+	private ScheduledExecutorService executor;
 	private int delay;
 	public PingSpoof() {
 		super(EncryptedString.of("Ping Spoof"),
@@ -43,6 +48,13 @@ public final class PingSpoof extends Module implements PacketReceiveListener {
 	@Override
 	public void onEnable() {
 		eventManager.add(PacketReceiveListener.class, this);
+		if (executor == null || executor.isShutdown()) {
+			executor = Executors.newSingleThreadScheduledExecutor(r -> {
+				Thread t = new Thread(r, "PingSpoof-Worker");
+				t.setDaemon(true);
+				return t;
+			});
+		}
 
 		delay = ping.getRandomValueInt();
 		super.onEnable();
@@ -51,19 +63,26 @@ public final class PingSpoof extends Module implements PacketReceiveListener {
 	@Override
 	public void onDisable() {
 		eventManager.remove(PacketReceiveListener.class, this);
+		if (executor != null) {
+			executor.shutdownNow();
+			executor = null;
+		}
 		super.onDisable();
 	}
 
 	@Override
 	public void onPacketReceive(PacketReceiveEvent event) {
 		if (event.packet instanceof KeepAliveS2CPacket packet) {
-			new Thread(() -> {
-				try {
-					Thread.sleep(delay);
+			ScheduledExecutorService exec = this.executor;
+			if (exec == null || exec.isShutdown()) return;
+
+			long holdMs = Math.max(0, delay);
+			delay = ping.getRandomValueInt();
+			exec.schedule(() -> {
+				if (mc.getNetworkHandler() != null && mc.getNetworkHandler().getConnection() != null && mc.getNetworkHandler().getConnection().isOpen()) {
 					mc.getNetworkHandler().getConnection().send(new KeepAliveC2SPacket(packet.getId()));
-					delay = ping.getRandomValueInt();
-				} catch (InterruptedException ignored) {}
-			}).start();
+				}
+			}, holdMs, TimeUnit.MILLISECONDS);
 
 			event.cancel();
 		}

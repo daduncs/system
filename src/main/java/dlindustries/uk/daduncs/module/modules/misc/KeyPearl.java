@@ -204,7 +204,7 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 					finish();
 					break;
 				}
-				if (AntibanbyDaduncs.isSlotPending()) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 					break;
 				}
 				InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL);
@@ -213,14 +213,14 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 			}
 			case 2: {
 				if (!mc.player.getMainHandStack().isOf(Items.ENDER_PEARL)) {
-					if (!AntibanbyDaduncs.isSlotPending()) {
+					if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
 						InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL);
 					}
 					return;
 				}
 
 				if (!isAggro) {
-					if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending()) {
+					if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
 						return;
 					}
 
@@ -256,14 +256,12 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 				if (stepCounter > 20) {
 					if (rotateStartAge >= 0 && mc.player.age > rotateStartAge) {
 						firePearl(true);
-					} else if (rotateStartAge < 0) {
-						firePearl(false);
 					}
 				}
 				break;
 			}
 			case 3: {
-				if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 					return;
 				}
 
@@ -320,7 +318,7 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 	}
 
 	private void firePearl(boolean aligned) {
-		if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isAttackSent() || AntibanbyDaduncs.isSlotPending()) {
+		if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
 			return;
 		}
 

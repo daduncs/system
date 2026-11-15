@@ -31,7 +31,6 @@ import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
 import dlindustries.uk.daduncs.managers.Recorder;
 import dlindustries.uk.daduncs.mixin.ClientPlayerInteractionManagerAccessor;
-import dlindustries.uk.daduncs.module.modules.mace.AutoMaceV1;
 import dlindustries.uk.daduncs.module.modules.mace.MaceSwap;
 import dlindustries.uk.daduncs.module.modules.misc.ElytraSwap;
 import dlindustries.uk.daduncs.module.modules.spear.SpearLunge;
@@ -139,7 +138,7 @@ public final class HitManager extends Module implements AttackListener, TickList
     @Override
     public void onEnable() {
         java.util.List<String> disabled = new java.util.ArrayList<>();
-        for (Class<? extends Module> type : java.util.List.of(AutoMaceV1.class, MaceSwap.class)) {
+        for (Class<? extends Module> type : java.util.List.of(MaceSwap.class)) {
             Module module = dlindustries.uk.daduncs.System.INSTANCE.getModuleManager().getModule(type);
             if (module != null && module.isEnabled()) {
                 module.setEnabled(false);
@@ -346,9 +345,17 @@ public final class HitManager extends Module implements AttackListener, TickList
 
                 if (mc.player.isUsingItem() && mc.interactionManager != null) {
                     mc.interactionManager.stopUsingItem(mc.player);
+                    slamTicksRemaining = 1;
+                    return;
                 }
 
-                selectSlot(slamMaceSlot);
+                if (mc.player.getInventory().getSelectedSlot() != slamMaceSlot) {
+                    selectSlot(slamMaceSlot);
+                    if (AntibanbyDaduncs.isSlotPending() || mc.player.getInventory().getSelectedSlot() != slamMaceSlot) {
+                        slamTicksRemaining = 1;
+                        return;
+                    }
+                }
 
                 slamTimeoutTicks--;
 
@@ -365,7 +372,7 @@ public final class HitManager extends Module implements AttackListener, TickList
                 boolean inSafeReach = eyeToBox <= safeReach;
                 boolean rayHits = WorldUtils.doesRaycastHitEntity(mc.player, slamTarget, safeReach);
 
-                if (inSafeReach && rayHits && !AntibanbyDaduncs.isAttackSent() && !AntibanbyDaduncs.isMovementSent()) {
+                if (inSafeReach && rayHits && AntibanbyDaduncs.canAttackNow()) {
                     Recorder tm = Recorder.getInstance();
                     if (tm != null) {
                         tm.recordModuleEvent("HitManager", "MACE_SLAM_ATTACK", "Attacking target " + slamTarget.getName().getString() + " with mace slot " + slamMaceSlot + " (reach=" + String.format(java.util.Locale.ROOT, "%.2f", eyeToBox) + ")", null);
@@ -409,10 +416,7 @@ public final class HitManager extends Module implements AttackListener, TickList
             if (tm != null) {
                 tm.recordModuleEvent("HitManager", "RESTORE_SLOT", "Restoring slot to slamReturnSlot " + slamReturnSlot, null);
             }
-            if (!actionSentThisTick && !AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
-                if (mc.player != null && mc.player.isUsingItem() && mc.interactionManager != null) {
-                    mc.interactionManager.stopUsingItem(mc.player);
-                }
+            if (mc.currentScreen == null && !actionSentThisTick && !AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending() && !mc.player.isUsingItem()) {
                 selectSlot(slamReturnSlot);
             } else {
                 queuedSlot = slamReturnSlot;
@@ -422,7 +426,7 @@ public final class HitManager extends Module implements AttackListener, TickList
     }
 
     private void selectSlot(int slot) {
-        if (mc.player == null || mc.getNetworkHandler() == null || slot < 0 || slot > 8) return;
+        if (mc.player == null || mc.getNetworkHandler() == null || mc.currentScreen != null || slot < 0 || slot > 8) return;
 
         if (mc.player.getInventory().getSelectedSlot() == slot) {
             queuedSlot = -1;
@@ -435,15 +439,12 @@ public final class HitManager extends Module implements AttackListener, TickList
         }
 
         Recorder tm = Recorder.getInstance();
-        if (actionSentThisTick || AntibanbyDaduncs.isActionSent()) {
+        if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || mc.player.isUsingItem()) {
             queuedSlot = slot;
             if (tm != null) {
                 tm.recordModuleEvent("HitManager", "QUEUE_SLOT", "Queued slot " + slot + " because actionSentThisTick=" + actionSentThisTick + " or packetGuardAction=" + AntibanbyDaduncs.isActionSent(), null);
             }
         } else {
-            if (mc.player.isUsingItem() && mc.interactionManager != null) {
-                mc.interactionManager.stopUsingItem(mc.player);
-            }
             if (tm != null) {
                 tm.recordModuleEvent("HitManager", "SYNC_SLOT", "Syncing selected slot to " + slot, null);
             }
