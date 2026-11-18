@@ -61,6 +61,17 @@ public class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
 		super(world, profile);
 	}
 
+	@Inject(method = "dropSelectedItem", at = @At("HEAD"), cancellable = true)
+	private void beforeDrop(boolean entireStack, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+		// A rejected send must not remove an item from the local inventory.
+		if (!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canDropNow()) cir.setReturnValue(false);
+	}
+
+	@Inject(method = "dropSelectedItem", at = @At("RETURN"))
+	private void afterDrop(boolean entireStack, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+		dlindustries.uk.daduncs.managers.AntibanbyDaduncs.finishDrop(cir.getReturnValue());
+	}
+
 	@Inject(method = "tickMovement", at = @At("HEAD"))
 	private void onTickMovementHead(CallbackInfo ci) {
 		dlindustries.uk.daduncs.module.modules.misc.Fly.beforeMove();

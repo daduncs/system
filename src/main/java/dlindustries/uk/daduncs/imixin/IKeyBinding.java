@@ -24,4 +24,6 @@ public interface IKeyBinding {
 	boolean isActuallyPressed();
 
 	void resetPressed();
+
+	void setRawPressed(boolean pressed);
 }

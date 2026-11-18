@@ -53,7 +53,7 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 	private final bool friendSafe = new bool(EncryptedString.of("Friend Safe"), true)
 			.setDescription(EncryptedString.of("Doesn't anchor next to a friend"));
 	private final bool stopOnKill = new bool(EncryptedString.of("Stop on Kill"), false).setDescription(EncryptedString.of("Doesn't anchor if body nearby"));
-	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), false).setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
+	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), false).setDescription(EncryptedString.of("Records module clicks as simulated input"));
 
 	private final number switchDelay = new number(EncryptedString.of("Switch Delay"), 0, 1000, 70, 10);
 	private final number switchChance = new number(EncryptedString.of("Switch Chance"), 0, 100, 100, 1);
@@ -127,12 +127,7 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 		explodeTimer.reset();
 		explodeTargetDelay = calculateDelay(explodeDelay);
 
-		ownedAnchors.clear();
-		airplacedAnchors.clear();
-		airplacedTimestamps.clear();
-		airplaceDamageWindowCleared.clear();
-		lastExplodedPos = null;
-
+		clearAnchorPositions();
 		super.onEnable();
 	}
 
@@ -140,12 +135,21 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 	public void onDisable() {
 		eventManager.remove(TickListener.class, this);
 		eventManager.remove(ItemUseListener.class, this);
+		clearAnchorPositions();
+		super.onDisable();
+	}
+
+	@Override
+	public void onPlayerChanged() {
+		clearAnchorPositions();
+	}
+
+	private void clearAnchorPositions() {
 		ownedAnchors.clear();
 		airplacedAnchors.clear();
 		airplacedTimestamps.clear();
 		airplaceDamageWindowCleared.clear();
 		lastExplodedPos = null;
-		super.onDisable();
 	}
 
 	@Override
@@ -207,20 +211,21 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 
 						if (randomInt <= placeChance.getValueInt()) {
 							if (!mc.player.getMainHandStack().isOf(Items.GLOWSTONE)) {
-								if (!switchTimer.hasReached(switchTargetDelay)) {
+								if (!switchTimer.hasReached(switchTargetDelay) || !AntibanbyDaduncs.canSwapSlotNow()) {
 									return;
 								}
 
 								randomInt = MathUtils.randomInt(1, 100);
 
 								if(randomInt <= switchChance.getValueInt()) {
-									switchTimer.reset();
-									switchTargetDelay = calculateDelay(switchDelay);
-									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-									if (tm != null) {
-										tm.recordModuleEvent("AnchorMacro", "SWITCH_GLOWSTONE", "Selecting GLOWSTONE from hotbar", null);
+									if (InventoryUtils.selectItemFromHotbar(Items.GLOWSTONE)) {
+										switchTimer.reset();
+										switchTargetDelay = calculateDelay(switchDelay);
+										dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+										if (tm != null) {
+											tm.recordModuleEvent("AnchorMacro", "SWITCH_GLOWSTONE", "Selecting GLOWSTONE from hotbar", null);
+										}
 									}
-									InventoryUtils.selectItemFromHotbar(Items.GLOWSTONE);
 								}
 							}
 
@@ -228,22 +233,26 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 								if (!glowstoneTimer.hasReached(glowstoneTargetDelay)) {
 									return;
 								}
+								if (mc.interactionManager == null || mc.interactionManager.isBreakingBlock()
+										|| !AntibanbyDaduncs.canInteractBlockNow(net.minecraft.util.Hand.MAIN_HAND, hit)) {
+									return;
+								}
 
 								randomInt = MathUtils.randomInt(1, 100);
 
 								if(randomInt <= glowstoneChance.getValueInt()) {
-									glowstoneTimer.reset();
-									glowstoneTargetDelay = calculateDelay(glowstoneDelay);
+									if (WorldUtils.placeBlock(hit, true)) {
+										glowstoneTimer.reset();
+										glowstoneTargetDelay = calculateDelay(glowstoneDelay);
 
-									if (clickSimulation.getValue())
-										MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+										if (clickSimulation.getValue())
+											MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 
-									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-									if (tm != null) {
-										tm.recordModuleEvent("AnchorMacro", "PLACE_GLOWSTONE", "Placing glowstone at " + hit.getBlockPos().toShortString(), null);
+										dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+										if (tm != null) {
+											tm.recordModuleEvent("AnchorMacro", "PLACE_GLOWSTONE", "Placing glowstone at " + hit.getBlockPos().toShortString(), null);
+										}
 									}
-
-									WorldUtils.placeBlock(hit, true);
 									return;
 								}
 							}
@@ -274,18 +283,19 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 						}
 
 						if (mc.player.getInventory().getSelectedSlot() != targetSlot) {
-							if (!switchTimer.hasReached(switchTargetDelay)) {
+							if (!switchTimer.hasReached(switchTargetDelay) || !AntibanbyDaduncs.canSwapSlotNow()) {
 								return;
 							}
 
 							if(randomInt <= switchChance.getValueInt()) {
-								switchTimer.reset();
-								switchTargetDelay = calculateDelay(switchDelay);
-								dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-								if (tm != null) {
-									tm.recordModuleEvent("AnchorMacro", "SWITCH_EXPLODE_SLOT", "Setting selectedSlot to " + targetSlot + " (current=" + mc.player.getInventory().getSelectedSlot() + ")", null);
+								if (InventoryUtils.setInvSlot(targetSlot)) {
+									switchTimer.reset();
+									switchTargetDelay = calculateDelay(switchDelay);
+									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+									if (tm != null) {
+										tm.recordModuleEvent("AnchorMacro", "SWITCH_EXPLODE_SLOT", "Setting selectedSlot to " + targetSlot + " (current=" + mc.player.getInventory().getSelectedSlot() + ")", null);
+									}
 								}
-								InventoryUtils.setInvSlot(targetSlot);
 							}
 						}
 
@@ -297,17 +307,15 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 							if (!explodeTimer.hasReached(explodeTargetDelay)) {
 								return;
 							}
+							if (mc.interactionManager == null || mc.interactionManager.isBreakingBlock()
+									|| !AntibanbyDaduncs.canInteractBlockNow(net.minecraft.util.Hand.MAIN_HAND, hit)) {
+								return;
+							}
 
 							randomInt = MathUtils.randomInt(1, 100);
 
 							if(randomInt <= explodeChance.getValueInt()) {
-								explodeTimer.reset();
-								explodeTargetDelay = calculateDelay(explodeDelay);
-
 								if (!onlyCharge.getValue()) {
-									if (clickSimulation.getValue() && !isAirplaced)
-										MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-
 									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
 									boolean shouldAirplace = activateHeld && doubleAnchorEnabled && !isAirplaced && mc.player.getMainHandStack().isOf(Items.RESPAWN_ANCHOR);
 
@@ -316,6 +324,8 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 											tm.recordModuleEvent("AnchorMacro", "AIRPLACE_DOUBLE_ANCHOR", "DoubleAnchor.doAirplace at " + hit.getBlockPos().toShortString(), null);
 										}
 										if (DoubleAnchor.doAirplace(hit)) {
+											explodeTimer.reset();
+											explodeTargetDelay = calculateDelay(explodeDelay);
 											lastExplodedPos = targetPos;
 											ownedAnchors.add(targetPos);
 											airplacedAnchors.add(targetPos);
@@ -326,12 +336,17 @@ public final class AnchorMacro extends Module implements TickListener, ItemUseLi
 										if (tm != null) {
 											tm.recordModuleEvent("AnchorMacro", "EXPLODE_ANCHOR", "WorldUtils.placeBlock at " + hit.getBlockPos().toShortString() + " with slot=" + targetSlot, null);
 										}
-										WorldUtils.placeBlock(hit, true);
-										lastExplodedPos = targetPos;
-										ownedAnchors.remove(targetPos);
-										airplacedAnchors.remove(targetPos);
-										airplacedTimestamps.remove(targetPos);
-										airplaceDamageWindowCleared.remove(targetPos);
+										if (WorldUtils.placeBlock(hit, true)) {
+											explodeTimer.reset();
+											explodeTargetDelay = calculateDelay(explodeDelay);
+											if (clickSimulation.getValue() && !isAirplaced)
+												MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+											lastExplodedPos = targetPos;
+											ownedAnchors.remove(targetPos);
+											airplacedAnchors.remove(targetPos);
+											airplacedTimestamps.remove(targetPos);
+											airplaceDamageWindowCleared.remove(targetPos);
+										}
 									}
 								}
 							}

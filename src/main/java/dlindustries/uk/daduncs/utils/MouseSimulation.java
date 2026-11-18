@@ -20,58 +20,55 @@
 
 package dlindustries.uk.daduncs.utils;
 
-import dlindustries.uk.daduncs.event.EventManager;
-import dlindustries.uk.daduncs.event.events.ButtonListener;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.HashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static dlindustries.uk.daduncs.System.mc;
 
 
 public final class MouseSimulation {
-	public static HashMap<Integer, Boolean> mouseButtons = new HashMap<>();
-	public static ExecutorService clickExecutor = Executors.newFixedThreadPool(100);
-
-	public static boolean isMouseButtonPressed(int keyCode) {
-		Boolean key = mouseButtons.get(keyCode);
-		return key != null ? key : false;
-	}
+	private static final ScheduledExecutorService clickScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+		Thread t = new Thread(r, "system-mouse-sim");
+		t.setDaemon(true);
+		return t;
+	});
 
 	public static void mousePress(int keyCode) {
-		mouseButtons.put(keyCode, true);
+		if (mc != null && !mc.isOnThread()) {
+			mc.execute(() -> mousePress(keyCode));
+			return;
+		}
 		dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-		if (tm != null && mc.getWindow() != null) {
+		if (tm != null && mc != null && mc.getWindow() != null) {
 			double x = mc.mouse != null ? mc.mouse.getX() : 0;
 			double y = mc.mouse != null ? mc.mouse.getY() : 0;
 			tm.recordClick(keyCode, GLFW.GLFW_PRESS, 0, x, y, true);
 		}
-		EventManager.fire(new ButtonListener.ButtonEvent(keyCode, mc.getWindow().getHandle(), GLFW.GLFW_PRESS));
 	}
 
 	public static void mouseRelease(int keyCode) {
-		mouseButtons.put(keyCode, false);
+		if (mc != null && !mc.isOnThread()) {
+			mc.execute(() -> mouseRelease(keyCode));
+			return;
+		}
 		dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-		if (tm != null && mc.getWindow() != null) {
+		if (tm != null && mc != null && mc.getWindow() != null) {
 			double x = mc.mouse != null ? mc.mouse.getX() : 0;
 			double y = mc.mouse != null ? mc.mouse.getY() : 0;
 			tm.recordClick(keyCode, GLFW.GLFW_RELEASE, 0, x, y, true);
 		}
-		EventManager.fire(new ButtonListener.ButtonEvent(keyCode, mc.getWindow().getHandle(), GLFW.GLFW_RELEASE));
 	}
 
 	public static void mouseClick(int keyCode, int millis) {
-		clickExecutor.submit(() -> {
-			try {
-				MouseSimulation.mousePress(keyCode);
-				Thread.sleep(millis);
-				MouseSimulation.mouseRelease(keyCode);
-			} catch (InterruptedException ignored) {
-
+		mousePress(keyCode);
+		clickScheduler.schedule(() -> {
+			if (mc != null) {
+				mc.execute(() -> mouseRelease(keyCode));
 			}
-		});
+		}, Math.max(0, millis), TimeUnit.MILLISECONDS);
 	}
 
 	public static void mouseClick(int keyCode) {

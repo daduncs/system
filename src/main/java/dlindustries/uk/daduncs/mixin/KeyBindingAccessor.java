@@ -27,6 +27,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(KeyBinding.class)
 public interface KeyBindingAccessor {
+	@Accessor("timesPressed")
+	int getTimesPressed();
+
 	@Accessor("boundKey")
 	InputUtil.Key getBoundKey();
 }

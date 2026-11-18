@@ -21,7 +21,6 @@
 package dlindustries.uk.daduncs.module.modules.render;
 
 import dlindustries.uk.daduncs.event.events.GameRenderListener;
-import dlindustries.uk.daduncs.event.events.PacketReceiveListener;
 import dlindustries.uk.daduncs.gui.Theme;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
@@ -32,7 +31,6 @@ import dlindustries.uk.daduncs.utils.RenderUtils;
 import dlindustries.uk.daduncs.utils.WorldUtils;
 import net.minecraft.block.entity.*;
 import net.minecraft.client.render.Camera;
-import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -40,9 +38,8 @@ import net.minecraft.world.chunk.WorldChunk;
 
 import java.awt.*;
 
-public final class StorageEsp extends Module implements GameRenderListener, PacketReceiveListener {
+public final class StorageEsp extends Module implements GameRenderListener {
 	private final number alpha = new number(EncryptedString.of("Alpha"), 1, 255, 125, 1);
-	private final bool donutBypass = new bool(EncryptedString.of("Donut Bypass"), false);
 	private final bool tracers = new bool(EncryptedString.of("Tracers"), false)
 			.setDescription(EncryptedString.of("Draws a line from your player to the storage block"));
 
@@ -51,19 +48,17 @@ public final class StorageEsp extends Module implements GameRenderListener, Pack
 				EncryptedString.of("Renders storage blocks through walls"),
 				-1,
 				Category.RENDER);
-		addSettings(donutBypass, alpha, tracers);
+		addSettings(alpha, tracers);
 	}
 
 	@Override
 	public void onEnable() {
-		eventManager.add(PacketReceiveListener.class, this);
 		eventManager.add(GameRenderListener.class, this);
 		super.onEnable();
 	}
 
 	@Override
 	public void onDisable() {
-		eventManager.remove(PacketReceiveListener.class, this);
 		eventManager.remove(GameRenderListener.class, this);
 		super.onDisable();
 	}
@@ -138,12 +133,4 @@ public final class StorageEsp extends Module implements GameRenderListener, Pack
 		event.matrices.pop();
 	}
 
-	@Override
-	public void onPacketReceive(PacketReceiveEvent event) {
-		if (donutBypass.getValue()) {
-			if (event.packet instanceof ChunkDeltaUpdateS2CPacket) {
-				event.cancel();
-			}
-		}
-	}
 }

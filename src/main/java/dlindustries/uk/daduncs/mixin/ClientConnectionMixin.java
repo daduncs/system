@@ -26,7 +26,9 @@ import dlindustries.uk.daduncs.event.events.PacketSendListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
 import dlindustries.uk.daduncs.managers.Recorder;
 import io.netty.channel.ChannelFutureListener;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.ClientConnection;
+import net.minecraft.network.NetworkSide;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.network.packet.Packet;
 import org.jetbrains.annotations.Nullable;
@@ -40,11 +42,25 @@ public class ClientConnectionMixin {
 
 	@Inject(method = "handlePacket", at = @At("HEAD"), cancellable = true)
 	private static <T extends PacketListener> void onPacketReceive(Packet<T> packet, PacketListener listener, CallbackInfo ci) {
-		AntibanbyDaduncs.onPacketReceive(packet);
+		if (listener == null || listener.getSide() != NetworkSide.CLIENTBOUND) {
+			return;
+		}
 
-		Recorder tm = Recorder.getInstance();
-		if (tm != null) {
-			tm.recordPacketReceive(packet);
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && !client.isOnThread()) {
+			client.execute(() -> {
+				AntibanbyDaduncs.onPacketReceive(packet);
+				Recorder tm = Recorder.getInstance();
+				if (tm != null) {
+					tm.recordPacketReceive(packet);
+				}
+			});
+		} else {
+			AntibanbyDaduncs.onPacketReceive(packet);
+			Recorder tm = Recorder.getInstance();
+			if (tm != null) {
+				tm.recordPacketReceive(packet);
+			}
 		}
 
 		PacketReceiveListener.PacketReceiveEvent event = new PacketReceiveListener.PacketReceiveEvent(packet);
@@ -55,19 +71,23 @@ public class ClientConnectionMixin {
 
 	@Inject(method = "send(Lnet/minecraft/network/packet/Packet;Lio/netty/channel/ChannelFutureListener;Z)V", at = @At("HEAD"), cancellable = true)
 	private void onPacketSend(Packet<?> packet, @Nullable ChannelFutureListener callback, boolean flush, CallbackInfo ci) {
-		if (AntibanbyDaduncs.filterPacket(packet)) {
-			ci.cancel();
+		if (((ClientConnection) (Object) this).getSide() != NetworkSide.CLIENTBOUND) {
 			return;
 		}
 
+		if (AntibanbyDaduncs.filterPacket(packet)) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "send(Lnet/minecraft/network/packet/Packet;Lio/netty/channel/ChannelFutureListener;Z)V", at = @At("RETURN"))
+	private void afterPacketSend(Packet<?> packet, @Nullable ChannelFutureListener callback, boolean flush, CallbackInfo ci) {
+		if (((ClientConnection) (Object) this).getSide() != NetworkSide.CLIENTBOUND) return;
 		Recorder tm = Recorder.getInstance();
 		if (tm != null) {
 			tm.recordPacket(packet);
 		}
 
-		PacketSendListener.PacketSendEvent event = new PacketSendListener.PacketSendEvent(packet);
-
-		EventManager.fire(event);
-		if (event.isCancelled()) ci.cancel();
+		EventManager.fire(new PacketSendListener.PacketSendEvent(packet));
 	}
 }

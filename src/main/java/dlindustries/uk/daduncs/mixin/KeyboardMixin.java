@@ -41,6 +41,8 @@ public class KeyboardMixin {
 
 	@Inject(method = "onKey", at = @At("HEAD"))
 	private void onPress(long window, int action, KeyInput input, CallbackInfo ci) {
+		if (window != client.getWindow().getHandle()) return;
+		dlindustries.uk.daduncs.utils.KeyUtils.onScanCode(input.scancode(), action);
 		Recorder tm = Recorder.getInstance();
 		if (tm != null) {
 			tm.recordKey(input.key(), input.scancode(), action, input.modifiers());

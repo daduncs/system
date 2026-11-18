@@ -41,10 +41,12 @@ import net.minecraft.client.gui.screen.TitleScreen;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public final class ModuleManager implements ButtonListener {
 	private final List<Module> modules = new ArrayList<>();
+	private final List<Module> coordinatedModules = new ArrayList<>();
 
 	public ModuleManager() {
 		addModules();
@@ -52,9 +54,9 @@ public final class ModuleManager implements ButtonListener {
 	}
 
 	public void addModules() {
-		add(new ClickGUI());
-		add(new Friends());
-		add(new Configs());
+		addWithNativeInput(new ClickGUI());
+		addWithNativeInput(new Friends());
+		addWithNativeInput(new Configs());
 
 		add(new AnchorMacro());
 		add(new AutoCrystal());
@@ -71,40 +73,40 @@ public final class ModuleManager implements ButtonListener {
 		add(new AutoXP());
 		add(new CrystalOptimizer());
 		add(new ElytraSwap());
-		add(new FastPlace());
+		addWithNativeInput(new FastPlace());
 		add(new AutoBridge());
 		add(new FireworkMacro());
 		add(new KeyPearl());
 		add(new NoBreakDelay());
 		add(new NoJumpDelay());
-		add(new AntiMiss());
-		add(new PackSpoof());
+		addWithNativeInput(new AntiMiss());
+		addWithNativeInput(new PackSpoof());
 		add(new PingSpoof());
-		add(new Prevent());
-		add(new SelfFlag());
-		add(new NameHider());
+		addWithNativeInput(new Prevent());
+		addWithNativeInput(new SelfFlag());
+		addWithNativeInput(new NameHider());
 		add(new Fly());
 		add(new NoDamage());
-		add(new AutoReconnect());
+		addWithNativeInput(new AutoReconnect());
 
-		add(new Freecam());
-		add(new ModuleHud());
-		add(new EffectsHud());
-		add(new HotkeysHud());
-		add(new InventoryHud());
-		add(new NoBounce());
-		add(new PlayerESP());
-		add(new Esp());
-		add(new HandShaders());
-		add(new CustomSky());
-		add(new StorageEsp());
-		add(new TargetHud());
-		add(new Watermark());
-		add(new MusicHud());
-		add(new WorldLyrics());
-		add(new HitFx());
-		add(new Nametags());
-		add(new PopFx());
+		addWithNativeInput(new Freecam());
+		addWithNativeInput(new ModuleHud());
+		addWithNativeInput(new EffectsHud());
+		addWithNativeInput(new HotkeysHud());
+		addWithNativeInput(new InventoryHud());
+		addWithNativeInput(new NoBounce());
+		addWithNativeInput(new PlayerESP());
+		addWithNativeInput(new Esp());
+		addWithNativeInput(new HandShaders());
+		addWithNativeInput(new CustomSky());
+		addWithNativeInput(new StorageEsp());
+		addWithNativeInput(new TargetHud());
+		addWithNativeInput(new Watermark());
+		addWithNativeInput(new MusicHud());
+		addWithNativeInput(new WorldLyrics());
+		addWithNativeInput(new HitFx());
+		addWithNativeInput(new Nametags());
+		addWithNativeInput(new PopFx());
 
 		add(new MaceSwap());
 		add(new Grappler());
@@ -116,7 +118,7 @@ public final class ModuleManager implements ButtonListener {
 		add(new AimAssist());
 		add(new AutoJumpReset());
 		add(new AutoWTap());
-		add(new Sprint());
+		addWithNativeInput(new Sprint());
 		add(new TriggerBot());
 	}
 
@@ -126,9 +128,22 @@ public final class ModuleManager implements ButtonListener {
 				.toList();
 	}
 
+	public boolean hasGameplayModulesEnabled() {
+		for (Module module : coordinatedModules) {
+			if (module.isEnabled()) return true;
+		}
+		return false;
+	}
+
+	public void onPlayerChanged() {
+		for (Module module : modules) {
+			if (module.isEnabled()) module.onPlayerChanged();
+		}
+	}
+
 
 	public List<Module> getModules() {
-		return modules;
+		return Collections.unmodifiableList(modules);
 	}
 
 	public void addKeybinds() {
@@ -152,7 +167,14 @@ public final class ModuleManager implements ButtonListener {
 				.orElse(null);
 	}
 
+	/** Register a module that needs the shared gameplay action rules. */
 	public void add(Module module) {
+		modules.add(module);
+		coordinatedModules.add(module);
+	}
+
+	/** This module leaves gameplay actions to the normal Minecraft input loop. */
+	public void addWithNativeInput(Module module) {
 		modules.add(module);
 	}
 
@@ -172,9 +194,10 @@ public final class ModuleManager implements ButtonListener {
 			if (module.getKey() != event.button)
 				return;
 
-			if (hold(module))
-				module.setEnabled(event.action != GLFW.GLFW_RELEASE);
-			else if (event.action == GLFW.GLFW_PRESS)
+			if (hold(module)) {
+				boolean pressed = event.action != GLFW.GLFW_RELEASE;
+				if (module.isEnabled() != pressed) module.setEnabled(pressed);
+			} else if (event.action == GLFW.GLFW_PRESS)
 				module.toggle();
 		});
 	}

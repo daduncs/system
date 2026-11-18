@@ -118,6 +118,9 @@ public abstract class Module implements Serializable {
 
 	public void onDisable() {}
 
+	/** Discard work that belongs to the previous player, including after respawn. */
+	public void onPlayerChanged() {}
+
 	public void addSetting(Setting<?> setting) {
 		this.settings.add(setting);
 	}

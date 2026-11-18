@@ -41,15 +41,33 @@ import static dlindustries.uk.daduncs.System.mc;
 
 public final class InventoryUtils {
 
-	public static void setInvSlot(int slot) {
-		if (mc.player == null || mc.interactionManager == null) return;
-		if (slot < 0 || slot > 8) return;
-		if (mc.currentScreen != null) return;
+	public static boolean isPlayerInventoryOpenQueued() {
+		return canOpenPlayerInventory()
+				&& ((dlindustries.uk.daduncs.mixin.KeyBindingAccessor) mc.options.inventoryKey).getTimesPressed() > 0;
+	}
+
+	/** A survival inventory may only open when it is the screen vanilla would select. */
+	public static boolean canOpenPlayerInventory() {
+		return mc.player != null && mc.player.isAlive() && !mc.player.isSpectator()
+				&& mc.currentScreen == null && mc.getOverlay() == null && mc.isWindowFocused()
+				&& mc.interactionManager != null && !mc.player.isInCreativeMode()
+				&& !mc.interactionManager.hasRidingInventory()
+				&& mc.player.currentScreenHandler == mc.player.playerScreenHandler;
+	}
+
+	public static boolean setInvSlot(int slot) {
+		if (!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canSwapSlotNow()
+				|| dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isSlotPending()) return false;
+		if (mc.player == null || mc.interactionManager == null) return false;
+		if (slot < 0 || slot > 8) return false;
+		if (mc.currentScreen != null) return false;
 		mc.player.getInventory().setSelectedSlot(slot);
 		((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
+		return true;
 	}
 
 	public static boolean selectItemFromHotbar(Predicate<Item> item) {
+		if (mc.player == null) return false;
 		PlayerInventory inv = mc.player.getInventory();
 
 		for (int i = 0; i < 9; i++) {
@@ -57,8 +75,9 @@ public final class InventoryUtils {
 			if (!item.test(itemStack.getItem()))
 				continue;
 
-			setInvSlot(i);
-			return true;
+			if (inv.getSelectedSlot() == i)
+				return true;
+			return setInvSlot(i);
 		}
 
 		return false;

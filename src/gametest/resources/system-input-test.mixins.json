@@ -1,0 +1,6 @@
+{
+  "required": true,
+  "package": "dlindustries.uk.daduncs.testmixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["HeldKeyMixin"]
+}

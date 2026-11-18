@@ -21,46 +21,76 @@
 package dlindustries.uk.daduncs.module.modules.sword;
 
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.imixin.IKeyBinding;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import net.minecraft.entity.effect.StatusEffects;
 
 public final class Sprint extends Module implements TickListener {
+    private boolean appliedSprint = false;
+
     public Sprint() {
         super(EncryptedString.of("Sprint"), EncryptedString.of("Keeps you sprinting at all times"), -1, Category.SWORD);
     }
 
     @Override
     public void onEnable() {
-        eventManager.add(TickListener.class, this);
+        appliedSprint = false;
+        // Run after AutoWTap and other movement-key modules on the same tick.
+        eventManager.add(TickListener.class, this, -100);
         super.onEnable();
     }
 
     @Override
     public void onDisable() {
         eventManager.remove(TickListener.class, this);
-        if (mc.player != null && mc.options != null) {
-            mc.options.sprintKey.setPressed(false);
-        }
+        releaseSprint();
         super.onDisable();
     }
 
     @Override
     public void onTick() {
         if (mc.player == null || mc.options == null) return;
-        if (mc.currentScreen != null) return;
+        if (mc.currentScreen != null) {
+            releaseSprint();
+            return;
+        }
 
         if (canSprintSafely()) {
-            mc.options.sprintKey.setPressed(true);
+            boolean toggleSprint = mc.options.getSprintToggled() != null && mc.options.getSprintToggled().getValue();
+            if (toggleSprint) {
+                if (!mc.options.sprintKey.isPressed()) {
+                    ((IKeyBinding) mc.options.sprintKey).setRawPressed(true);
+                }
+            } else {
+                mc.options.sprintKey.setPressed(true);
+            }
+            appliedSprint = true;
         } else {
-            mc.options.sprintKey.setPressed(false);
+            releaseSprint();
         }
     }
 
+    private void releaseSprint() {
+        if (!appliedSprint || mc.options == null || mc.options.sprintKey == null) {
+            appliedSprint = false;
+            return;
+        }
+        boolean toggleSprint = mc.options.getSprintToggled() != null && mc.options.getSprintToggled().getValue();
+        if (toggleSprint) {
+            if (!((IKeyBinding) mc.options.sprintKey).isActuallyPressed()) {
+                ((IKeyBinding) mc.options.sprintKey).setRawPressed(false);
+            }
+        } else {
+            ((IKeyBinding) mc.options.sprintKey).resetPressed();
+        }
+        appliedSprint = false;
+    }
+
     private boolean canSprintSafely() {
-        if (mc.player == null) return false;
-        if (!mc.player.input.hasForwardMovement()) return false;
+        if (mc.player == null || mc.options == null) return false;
+        if (!mc.options.forwardKey.isPressed() || mc.options.backKey.isPressed()) return false;
         if (mc.player.isSneaking()) return false;
         if (mc.player.horizontalCollision) return false;
 

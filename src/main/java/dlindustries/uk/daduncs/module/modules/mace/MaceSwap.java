@@ -166,6 +166,8 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 	@Override
 	public void onAttack(AttackEvent event) {
 		if (mc.player == null || mc.currentScreen != null) return;
+		if (((dlindustries.uk.daduncs.mixin.MinecraftClientAccessor) mc).getAttackCooldown() > 0) return;
+		if (mc.player.isRiding() || mc.player.isSpectator()) return;
 		if (!isAllowedWeapon()) return;
 		if (SlotManager.hasActiveSwaps() && !SlotManager.isOwnerActive(this)) return;
 
@@ -177,7 +179,12 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 					int axeSlot = InventoryUtils.getAxeSlot();
 					if (axeSlot != -1) {
 						if (!WorldUtils.isAxe(mc.player.getMainHandStack())) {
-							SlotManager.swapTo(this, axeSlot, inputSimulation.getValue(), 0, false, null);
+							if (mc.player.isUsingItem() || actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
+								return;
+							}
+							if (!SlotManager.swapTo(this, axeSlot, inputSimulation.getValue(), 6, switchBack.getValue(), this::restoreUseKeyIfNeeded)) {
+								return;
+							}
 						}
 						pendingShieldBreakTarget = playerTarget;
 						slamTimeoutTicks = 5;
@@ -192,6 +199,7 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 
 	public void handleAttack(Entity entity) {
 		if (mc.player == null || mc.currentScreen != null || !(entity instanceof LivingEntity target)) return;
+		if (mc.player.isRiding() || mc.player.isSpectator()) return;
 		if (!isAllowedWeapon()) return;
 		if (SlotManager.hasActiveSwaps() && !SlotManager.isOwnerActive(this)) return;
 		if (!isEntityAllowed(target)) return;
@@ -201,7 +209,12 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 				int axeSlot = InventoryUtils.getAxeSlot();
 				if (axeSlot != -1) {
 					if (!WorldUtils.isAxe(mc.player.getMainHandStack())) {
-						SlotManager.swapTo(this, axeSlot, inputSimulation.getValue(), 0, false, null);
+						if (mc.player.isUsingItem() || actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
+							return;
+						}
+						if (!SlotManager.swapTo(this, axeSlot, inputSimulation.getValue(), 6, switchBack.getValue(), this::restoreUseKeyIfNeeded)) {
+							return;
+						}
 					}
 					pendingShieldBreakTarget = playerTarget;
 					slamTimeoutTicks = 5;
@@ -217,7 +230,7 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 		if (mc.player == null || mc.player.isUsingItem()) {
 			return;
 		}
-		if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+		if (actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 			return;
 		}
 
@@ -290,12 +303,7 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 
 		boolean inSafeReach = eyeToBox <= safeReach;
 		boolean rayHits = WorldUtils.doesRaycastHitEntity(mc.player, target, safeReach);
-		if (!rayHits && inSafeReach) {
-			Vec3d eyePos = mc.player.getEyePos();
-			Vec3d lookVec = WorldUtils.getPlayerLookVec(mc.player);
-			Box targetBox = target.getBoundingBox().expand(0.20);
-			rayHits = targetBox.raycast(eyePos, eyePos.add(lookVec.multiply(safeReach))).isPresent();
-		}
+
 
 		if (target.hurtTime > 1 && !isAboutToLand()) {
 			return;
@@ -314,7 +322,11 @@ public final class MaceSwap extends Module implements AttackListener, TickListen
 			return;
 		}
 
-		if (mc.player.isUsingItem()) {
+		if (mc.player.isUsingItem() || mc.player.isRiding() || mc.player.isSpectator()) {
+			return;
+		}
+
+		if (actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || !AntibanbyDaduncs.canAttackNow() || AntibanbyDaduncs.isSlotPending()) {
 			return;
 		}
 

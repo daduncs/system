@@ -26,6 +26,20 @@ import org.lwjgl.glfw.GLFW;
 import static dlindustries.uk.daduncs.System.mc;
 
 public final class KeyUtils {
+	private static final java.util.Set<Integer> pressedScanCodes = new java.util.HashSet<>();
+
+	public static void onScanCode(int code, int action) {
+		if (action == GLFW.GLFW_PRESS) pressedScanCodes.add(code);
+		if (action == GLFW.GLFW_RELEASE) pressedScanCodes.remove(code);
+	}
+
+	public static boolean isScanCodePressed(int code) {
+		return pressedScanCodes.contains(code);
+	}
+
+	public static void clearScanCodes() {
+		pressedScanCodes.clear();
+	}
 
 	public static CharSequence getKey(int key) {
 		switch (key) {
@@ -213,7 +227,7 @@ public final class KeyUtils {
 	}
 
 	public static boolean isKeyPressed(int keyCode) {
-		if (keyCode < 0) return false;
+		if (keyCode < 0 || mc == null || mc.getWindow() == null || !mc.isWindowFocused()) return false;
 
 		if (keyCode <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
 			return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), keyCode) == GLFW.GLFW_PRESS;

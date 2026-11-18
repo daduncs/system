@@ -65,7 +65,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 	private final bool fakePunch = new bool(EncryptedString.of("Fake Punch"), false)
 			.setDescription(EncryptedString.of("Will hit every entity and block if you miss a hitcrystal"));
 	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), false)
-			.setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
+			.setDescription(EncryptedString.of("Records module clicks as simulated input"));
 	private final bool damageTick = new bool(EncryptedString.of("Damage Tick"), false)
 			.setDescription(EncryptedString.of("Times your crystals for a perfect d-tap"));
 	private final bool antiWeakness = new bool(EncryptedString.of("Anti-Weakness"), false)
@@ -114,19 +114,20 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 
 	@Override
 	public void onTick() {
-		if (mc.currentScreen != null)
+		if (mc.player == null || mc.world == null || mc.currentScreen != null)
 			return;
 
 		if (antiWeaknessRestoreSlot != -1) {
 			if (!mc.player.getMainHandStack().isOf(Items.END_CRYSTAL) && !WorldUtils.isSword(mc.player.getMainHandStack())) {
 				antiWeaknessRestoreSlot = -1;
-			} else if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
+			} else if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
 				dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
 				if (tm != null) {
 					tm.recordModuleEvent("AutoCrystal", "ANTI_WEAKNESS_RESTORE", "Restoring slot to previousSlot " + antiWeaknessRestoreSlot + " at tick start", null);
 				}
-				InventoryUtils.setInvSlot(antiWeaknessRestoreSlot);
-				antiWeaknessRestoreSlot = -1;
+				if (InventoryUtils.setInvSlot(antiWeaknessRestoreSlot)) {
+					antiWeaknessRestoreSlot = -1;
+				}
 			}
 		}
 
@@ -190,11 +191,9 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 			if (mc.crosshairTarget.getType() == HitResult.Type.BLOCK) {
 
 				if ((!dontPlace || isFirstPlace) && randomInt <= placeChance.getValueInt()) {
-					if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
+					if (mc.interactionManager != null && !mc.interactionManager.isBreakingBlock()
+							&& AntibanbyDaduncs.canInteractBlockNow(Hand.MAIN_HAND, hit) && !AntibanbyDaduncs.isSlotPending()) {
 						if ((BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK)) && CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.getBlockPos())) {
-
-							if (clickSimulation.getValue())
-								MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 
 							dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
 							if (tm != null) {
@@ -202,9 +201,11 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 										"WorldUtils.placeBlock at " + hit.getBlockPos().toShortString() + " side=" + hit.getSide() + ", placeTimer=" + placeTimer.getElapsedTime() + "ms", null);
 							}
 
-							WorldUtils.placeBlock(hit, true);
-
-							placeTimer.reset();
+							if (WorldUtils.placeBlock(hit, true)) {
+								if (clickSimulation.getValue())
+									MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+								placeTimer.reset();
+							}
 						}
 					}
 				}
@@ -218,7 +219,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 						if (!canFakePunchBlock(hit.getBlockPos()))
 							return;
 
-						if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
+						if (AntibanbyDaduncs.canStartStopDigNow() && !AntibanbyDaduncs.isSlotPending()) {
 							if (clickSimulation.getValue()) {
 								MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 							}
@@ -244,7 +245,7 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 			if (mc.crosshairTarget.getType() == HitResult.Type.MISS) {
 				if (fakePunch.getValue()) {
 					if (!dontBreak && randomInt <= breakChance.getValueInt()) {
-						if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
+						if (AntibanbyDaduncs.canSwingAirNow()) {
 							if (mc.interactionManager.hasLimitedAttackSpeed())
 								mc.attackCooldown = 10;
 
@@ -296,10 +297,16 @@ public final class AutoCrystal extends Module implements TickListener, ItemUseLi
 		}
 
 		if (needAntiWeakness) {
+			if (!AntibanbyDaduncs.canSwapSlotNow()) {
+				return;
+			}
 			if (tm != null) {
 				tm.recordModuleEvent("AutoCrystal", "ANTI_WEAKNESS_SWAP", "Selecting sword (slot=" + previousSlot + " -> sword)", null);
 			}
 			InventoryUtils.selectSword();
+			if (AntibanbyDaduncs.isSlotPending()) {
+				return;
+			}
 		}
 
 		if (clickSimulation.getValue())

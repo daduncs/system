@@ -27,10 +27,14 @@ import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.WorldUtils;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.hit.HitResult;
 
 public final class AntiMiss extends Module implements AttackListener, BlockBreakingListener {
 	private final bool onlyWeapon = new bool(EncryptedString.of("Only weapon"), true);
+	private final bool whitelistPickaxe = new bool(EncryptedString.of("Whitelist Pickaxe"), false)
+			.setDescription(EncryptedString.of("Allow attacks and block breaking while holding a pickaxe in your main hand"));
 	private final bool air = new bool(EncryptedString.of("Air"), true)
 			.setDescription(EncryptedString.of("Whether to stop hits directed to the air"));
 	private final bool blocks = new bool(EncryptedString.of("Blocks"), false)
@@ -41,7 +45,7 @@ public final class AntiMiss extends Module implements AttackListener, BlockBreak
 				EncryptedString.of("Doesn't let you miss your sword/axe hits"),
 				-1,
 				Category.MISC);
-		addSettings(onlyWeapon, air, blocks);
+		addSettings(onlyWeapon, air, blocks, whitelistPickaxe);
 	}
 
 	@Override
@@ -60,9 +64,7 @@ public final class AntiMiss extends Module implements AttackListener, BlockBreak
 
 	@Override
 	public void onAttack(AttackEvent event) {
-		if (mc.player == null || mc.crosshairTarget == null)
-			return;
-		if (onlyWeapon.getValue() && !WorldUtils.isWeapon(mc.player.getMainHandStack()))
+		if (!shouldApply())
 			return;
 
 		switch (mc.crosshairTarget.getType()) {
@@ -77,13 +79,22 @@ public final class AntiMiss extends Module implements AttackListener, BlockBreak
 
 	@Override
 	public void onBlockBreaking(BlockBreakingEvent event) {
-		if (mc.player == null || mc.crosshairTarget == null)
-			return;
-		if (onlyWeapon.getValue() && !WorldUtils.isWeapon(mc.player.getMainHandStack()))
+		if (!shouldApply())
 			return;
 
 		if (mc.crosshairTarget.getType() == HitResult.Type.BLOCK) {
 			if (blocks.getValue()) event.cancel();
 		}
+	}
+
+	private boolean shouldApply() {
+		if (mc.player == null || mc.crosshairTarget == null)
+			return false;
+
+		ItemStack heldItem = mc.player.getMainHandStack();
+		if (whitelistPickaxe.getValue() && heldItem.isIn(ItemTags.PICKAXES))
+			return false;
+
+		return !onlyWeapon.getValue() || WorldUtils.isWeapon(heldItem);
 	}
 }

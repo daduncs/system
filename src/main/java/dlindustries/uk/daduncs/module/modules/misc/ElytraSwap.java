@@ -127,6 +127,7 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
     private final TimerUtils swapDebounceTimer = new TimerUtils();
     private boolean keyWasDown = false;
     private boolean actionSentThisTick = false;
+    private boolean usingChestplate = false;
 
     public ElytraSwap() {
         super(
@@ -227,6 +228,9 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
 
     @Override
     public void onItemUse(ItemUseEvent event) {
+        // Only our synchronous vanilla use attempt may pass the swap input lock.
+        // Other modules' listeners and vanilla interaction checks still run.
+        if (usingChestplate) return;
         if (equipState != EquipState.IDLE) {
             event.cancel();
             return;
@@ -312,9 +316,26 @@ public final class ElytraSwap extends Module implements TickListener, AttackList
                 return;
             }
 
-            if (isChestplate(player.getMainHandStack())) {
-                if (mc.interactionManager.interactItem(player, Hand.MAIN_HAND).isAccepted()) {
-                    player.swingHand(Hand.MAIN_HAND);
+            if (!isChestplateEquipped()) {
+                if (!isChestplate(player.getMainHandStack())) {
+                    // The selected stack may have changed while waiting.
+                    equipState = EquipState.EQUIPPING;
+                    currentStepDelayMs = Math.max(50L, randomDelay());
+                    delayTimer.reset();
+                    return;
+                }
+                usingChestplate = true;
+                try {
+                    dlindustries.uk.daduncs.utils.WorldUtils.useItem(player, Hand.MAIN_HAND);
+                } finally {
+                    usingChestplate = false;
+                }
+                // A valid use can open a container or be blocked by mining.
+                // Neither means that the chestplate was equipped.
+                if (!isChestplateEquipped()) {
+                    currentStepDelayMs = Math.max(50L, randomDelay());
+                    delayTimer.reset();
+                    return;
                 }
             }
 

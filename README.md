@@ -44,6 +44,14 @@ System uses Gradle to build the client. Install the latest version of Gradle ont
 5. To build, simply run `./gradlew build` or create a run configuration for Gradle with the build command.
 6. Enjoy System! :D 
 
+### Adding a gameplay module
+
+Register a module with `ModuleManager.add` if it initiates an attack, item use, inventory click, or hotbar change. Use `addWithNativeInput` when Minecraft's input loop performs all actions. For example, FastPlace changes the held-use delay.
+
+Use the shared action check before changing the player's inventory or world. Let Minecraft perform the action and handle its result before advancing the module. The send event reports packets that the connection accepted. Use the input events to cancel an action. Clear player-specific work in `onPlayerChanged` so it cannot run after a respawn or reconnect.
+
+Run `./gradlew check` for the headless packet checks. Run `./gradlew -PclientGameTest runClientGameTest` for the input tests in a separate single-player world. The game test needs a graphics context. Add a test for valid input and one for a conflict when a new module shares an action with an existing module.
+
 ## Addition info
 
 This is a Crystal Pvp foccused client. Modules for other gamemodes are not thoroughly tested.

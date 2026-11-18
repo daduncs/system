@@ -20,10 +20,9 @@
 
 package dlindustries.uk.daduncs.module.modules.crystal;
 
-import dlindustries.uk.daduncs.event.events.ButtonListener;
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.event.events.MouseUpdateListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
-import dlindustries.uk.daduncs.mixin.KeyBindingAccessor;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.client.ClickGUI;
@@ -34,18 +33,16 @@ import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.InventoryUtils;
 import dlindustries.uk.daduncs.utils.TimerUtils;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.slot.SlotActionType;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public final class AutoInventoryTotem extends Module implements TickListener, ButtonListener {
+public final class AutoInventoryTotem extends Module implements TickListener, MouseUpdateListener {
 	public enum Mode {
 		Blatant, Random
 	}
@@ -82,11 +79,13 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	private final Random random = new Random();
 
 	private State state = State.IDLE;
+	private InventoryScreen activeScreen;
+	private InventoryScreen openedScreen;
 	private long targetOpenDelayMs = 0L;
 	private long targetInterClickDelayMs = 0L;
 	private long targetStayOpenMs = 0L;
 	private int lastSwappedSlot = -1;
-	private int lastClickTick = -1;
+	private int earliestClickTick = -1;
 
 	public AutoInventoryTotem() {
 		super(EncryptedString.of("Auto Inv Totem"),
@@ -99,7 +98,7 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	@Override
 	public void onEnable() {
 		eventManager.add(TickListener.class, this);
-		eventManager.add(ButtonListener.class, this);
+		eventManager.add(MouseUpdateListener.class, this);
 		resetState();
 		super.onEnable();
 	}
@@ -107,21 +106,9 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	@Override
 	public void onDisable() {
 		eventManager.remove(TickListener.class, this);
-		eventManager.remove(ButtonListener.class, this);
+		eventManager.remove(MouseUpdateListener.class, this);
 		resetState();
 		super.onDisable();
-	}
-
-	@Override
-	public void onButtonPress(ButtonListener.ButtonEvent event) {
-		if (event.action != GLFW.GLFW_PRESS) return;
-		if (mc.player == null || mc.world == null) return;
-		if (mc.currentScreen != null) return;
-		if (UtilitySwapper.isSwapping) return;
-
-		if (autoSwitch.getValue() && isInventoryKey(event.button)) {
-			switchBeforeOpen();
-		}
 	}
 
 	@Override
@@ -133,15 +120,13 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 
 		if (UtilitySwapper.isSwapping) return;
 
-		if (autoSwitch.getValue() && mc.currentScreen == null && mc.options != null && mc.options.inventoryKey != null) {
-			if (mc.options.inventoryKey.isPressed()) {
-				switchBeforeOpen();
-			}
+		if (autoSwitch.getValue() && InventoryUtils.isPlayerInventoryOpenQueued()) {
+			switchBeforeOpen();
 		}
 
 		if (autoOpen.getValue() && shouldOpenScreen()) {
 			if (mc.player.isSprinting()) {
-				mc.player.setSprinting(false);
+				stopSprintBeforeClick();
 				return;
 			}
 			if (mc.player.isUsingItem() || mc.player.isSneaking() || hasActiveMovementInput()) {
@@ -150,15 +135,24 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 			if (autoSwitch.getValue()) {
 				switchBeforeOpen();
 			}
-			mc.setScreen(new InventoryScreen(mc.player));
+			var screen = new InventoryScreen(mc.player);
+			mc.setScreen(screen);
+			if (mc.currentScreen != screen) return;
+			openedScreen = activeScreen = screen;
 			state = State.AWAIT_OPEN_DELAY;
 			targetOpenDelayMs = reactionDelay();
 			actionTimer.reset();
 			lastSwappedSlot = -1;
-			lastClickTick = mc.player.age;
 			return;
 		}
 
+		processInventoryLogic();
+	}
+
+	@Override
+	public void onMouseUpdate() {
+		// Screen clicks may run between game ticks, as vanilla GUI input does.
+		// Auto Open remains on the tick path and keeps its movement checks.
 		processInventoryLogic();
 	}
 
@@ -174,20 +168,24 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 			return;
 		}
 
-		boolean inInventory = mc.currentScreen instanceof InventoryScreen;
-
-		if (!inInventory) {
-			if (state != State.IDLE) {
-				resetState();
-			}
+		if (!(mc.currentScreen instanceof InventoryScreen screen)
+				|| mc.player.currentScreenHandler != screen.getScreenHandler()) {
+			if (activeScreen != null) resetState();
 			return;
+		}
+		if (screen != activeScreen) {
+			resetState();
+			activeScreen = screen;
 		}
 
 		if (UtilitySwapper.isSwapping) return;
+		if (!screen.getScreenHandler().getCursorStack().isEmpty()) return;
+
+		if (mc.player.age < earliestClickTick) return;
 
 		if (state == State.IDLE) {
 			if (mc.player.isSprinting()) {
-				mc.player.setSprinting(false);
+				stopSprintBeforeClick();
 			}
 			state = State.AWAIT_OPEN_DELAY;
 			boolean needsOffhand = mc.player.getOffHandStack().getItem() != Items.TOTEM_OF_UNDYING;
@@ -210,7 +208,8 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 
 		if (state == State.AWAIT_OPEN_DELAY) {
 			if (mc.player.isSprinting()) {
-				mc.player.setSprinting(false);
+				stopSprintBeforeClick();
+				return;
 			}
 			if (actionTimer.hasReached(targetOpenDelayMs)) {
 				state = State.EQUIP_OFFHAND;
@@ -221,14 +220,15 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 
 		if (state == State.EQUIP_OFFHAND) {
 			if (mc.player.isSprinting()) {
-				mc.player.setSprinting(false);
+				stopSprintBeforeClick();
 				return;
 			}
 			if (mc.player.isSneaking() || mc.player.isUsingItem() || hasActiveMovementInput()) {
 				return;
 			}
 
-			if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+			// Explicit inventory slots do not depend on the selected hotbar slot.
+			if (!AntibanbyDaduncs.canInventoryActionNow()) {
 				return;
 			}
 
@@ -239,8 +239,7 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 					int syncId = ((InventoryScreen) mc.currentScreen).getScreenHandler().syncId;
 					mc.interactionManager.clickSlot(syncId, slot, 40, SlotActionType.SWAP, mc.player);
 					lastSwappedSlot = slot;
-					lastClickTick = mc.player.age;
-
+		
 					int nextSlot = -1;
 					if (hotbar.getValue()) {
 						int targetHotbar = totemSlot.getValueInt() - 1;
@@ -269,14 +268,15 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 
 		if (state == State.EQUIP_HOTBAR) {
 			if (mc.player.isSprinting()) {
-				mc.player.setSprinting(false);
+				stopSprintBeforeClick();
 				return;
 			}
 			if (mc.player.isSneaking() || mc.player.isUsingItem() || hasActiveMovementInput()) {
 				return;
 			}
 
-			if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+			// Explicit inventory slots do not depend on the selected hotbar slot.
+			if (!AntibanbyDaduncs.canInventoryActionNow()) {
 				return;
 			}
 
@@ -291,28 +291,33 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 						int syncId = ((InventoryScreen) mc.currentScreen).getScreenHandler().syncId;
 						mc.interactionManager.clickSlot(syncId, slot, targetHotbar, SlotActionType.SWAP, mc.player);
 						lastSwappedSlot = slot;
-						lastClickTick = mc.player.age;
 					}
 				}
 			}
 
 			state = State.COMPLETED;
-			if (autoOpen.getValue()) {
+			if (autoOpen.getValue() && screen == openedScreen) {
 				targetStayOpenMs = stayOpenDelay();
 				closeTimer.reset();
 				state = State.AWAIT_CLOSE;
+				return; // Close on a later update, not in the click callback.
 			}
 		}
 
 		if (state == State.AWAIT_CLOSE) {
-			if (mc.player.age > lastClickTick && closeTimer.hasReached(targetStayOpenMs)) {
-				if (mc.currentScreen != null) {
+			if (closeTimer.hasReached(targetStayOpenMs)) {
+				if (screen == openedScreen && autoOpen.getValue()) {
 					mc.player.closeHandledScreen();
-					mc.setScreen(null);
 				}
 				resetState();
 			}
 		}
+	}
+
+	private void stopSprintBeforeClick() {
+		mc.player.setSprinting(false);
+		// Let the player tick send the sprint stop before frame-driven GUI clicks.
+		earliestClickTick = mc.player.age + 1;
 	}
 
 	private void switchBeforeOpen() {
@@ -323,17 +328,8 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 			InventoryUtils.setInvSlot(targetSlot);
 		}
 		if (mc.player.isSprinting()) {
-			mc.player.setSprinting(false);
+			stopSprintBeforeClick();
 		}
-	}
-
-	private boolean isInventoryKey(int button) {
-		if (mc.options == null || mc.options.inventoryKey == null) return false;
-		try {
-			InputUtil.Key bound = ((KeyBindingAccessor) mc.options.inventoryKey).getBoundKey();
-			if (bound != null && bound.getCode() == button) return true;
-		} catch (Exception ignored) {}
-		return false;
 	}
 
 	private int getBestTotemSlot(int excludeSlot, int cursorCol, int cursorRow) {
@@ -421,6 +417,7 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	}
 
 	private long reactionDelay(int targetSlot) {
+		if (delay.getValueLong() == 0) return 0L;
 		long userDelayMs = delay.getValueLong() * 50L;
 		long baseline = userDelayMs > 0 ? userDelayMs : 35L;
 
@@ -441,6 +438,7 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	}
 
 	private long clickDelay(int fromSlot, int toSlot) {
+		if (delay.getValueLong() == 0) return 0L;
 		long userDelayMs = delay.getValueLong() * 50L;
 		long baseline = userDelayMs > 0 ? Math.max(30L, (long) (userDelayMs * 0.75)) : 35L;
 
@@ -461,6 +459,7 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	}
 
 	private long stayOpenDelay() {
+		if (stayOpenFor.getValueLong() == 0) return 0L;
 		long userStayMs = stayOpenFor.getValueLong() * 50L;
 		long baseline = userStayMs > 0 ? userStayMs : 25L;
 		long jitter = Math.round(Math.abs(random.nextGaussian() * 15.0));
@@ -468,10 +467,12 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	}
 
 	public boolean shouldOpenScreen() {
-		if (mc.player == null || mc.currentScreen != null) return false;
+		if (!InventoryUtils.canOpenPlayerInventory() || AntibanbyDaduncs.isInventoryOpenReserved()
+				|| !AntibanbyDaduncs.canInventoryActionNow()) return false;
 		int targetHotbar = totemSlot.getValueInt() - 1;
 		boolean offhandMissing = mc.player.getOffHandStack().getItem() != Items.TOTEM_OF_UNDYING;
-		boolean hotbarMissing = hotbar.getValue() && mc.player.getInventory().getStack(targetHotbar).getItem() != Items.TOTEM_OF_UNDYING;
+		ItemStack stack = mc.player.getInventory().getStack(targetHotbar);
+		boolean hotbarMissing = hotbar.getValue() && (stack.isEmpty() || (forceTotem.getValue() && !stack.isOf(Items.TOTEM_OF_UNDYING)));
 
 		return (offhandMissing || hotbarMissing) &&
 				InventoryUtils.countItemExceptHotbar(item -> item == Items.TOTEM_OF_UNDYING) > 0;
@@ -488,9 +489,11 @@ public final class AutoInventoryTotem extends Module implements TickListener, Bu
 	}
 
 	private void resetState() {
+		activeScreen = null;
+		openedScreen = null;
+		earliestClickTick = -1;
 		state = State.IDLE;
 		lastSwappedSlot = -1;
-		lastClickTick = -1;
 		actionTimer.reset();
 		closeTimer.reset();
 	}

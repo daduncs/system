@@ -21,6 +21,14 @@
 package dlindustries.uk.daduncs.mixin;
 
 import dlindustries.uk.daduncs.System;
+import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
+import net.minecraft.entity.Entity;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.component.type.PiercingWeaponComponent;
+import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import dlindustries.uk.daduncs.module.modules.misc.NoBreakDelay;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.player.PlayerEntity;
@@ -41,6 +49,8 @@ public class ClientPlayerInteractionManagerMixin {
 	private int blockBreakingCooldown;
 
 	@Unique
+	private net.minecraft.item.Item sr$usedItem;
+	@Unique
 	private boolean sr$use;
 	@Unique
 	private float sr$y, sr$p, sr$ly, sr$lp;
@@ -55,10 +65,12 @@ public class ClientPlayerInteractionManagerMixin {
 	@Inject(method = "interactItem", at = @At("HEAD"), cancellable = true)
 	private void onInteractItemHead(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
 		if (player == null) {
+			sr$usedItem = null;
 			return;
 		}
 
-		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.isAttackSent()) {
+		sr$usedItem = player.getStackInHand(hand).getItem();
+		if (!AntibanbyDaduncs.canUseItemNow(hand)) {
 			cir.setReturnValue(ActionResult.PASS);
 			return;
 		}
@@ -86,15 +98,91 @@ public class ClientPlayerInteractionManagerMixin {
 		player.lastPitch = wp;
 	}
 
-	@Inject(method = "interactItem", at = @At("TAIL"))
+	@Inject(method = {"attackBlock", "updateBlockBreakingProgress"}, at = @At("HEAD"), cancellable = true)
+	private void beforeDig(net.minecraft.util.math.BlockPos pos, net.minecraft.util.math.Direction direction,
+			CallbackInfoReturnable<Boolean> cir) {
+		if (!AntibanbyDaduncs.canStartStopDigNow()) cir.setReturnValue(false);
+	}
+
+	@Inject(method = "clickSlot", at = @At("HEAD"), cancellable = true)
+	private void beforeSlotClick(int syncId, int slot, int button, SlotActionType type,
+			PlayerEntity player, CallbackInfo ci) {
+		if (!AntibanbyDaduncs.canInventoryActionNow()) ci.cancel();
+	}
+
+	@Inject(method = "attackEntity", at = @At("HEAD"), cancellable = true)
+	private void beforeEntityAttack(PlayerEntity player, Entity target, CallbackInfo ci) {
+		if (net.minecraft.client.MinecraftClient.getInstance().currentScreen != null) {
+			ci.cancel();
+			return;
+		}
+		if (!AntibanbyDaduncs.canAttackPacketNow()) ci.cancel();
+	}
+
+	@Inject(method = "attackWithPiercingWeapon", at = @At("HEAD"), cancellable = true)
+	private void beforeSpearAttack(PiercingWeaponComponent piercing, CallbackInfo ci) {
+		if (net.minecraft.client.MinecraftClient.getInstance().currentScreen != null) {
+			ci.cancel();
+			return;
+		}
+		if (!AntibanbyDaduncs.canAttackPacketNow()) ci.cancel();
+	}
+
+	@Inject(method = "interactBlock", at = @At("HEAD"), cancellable = true)
+	private void beforeBlockInteraction(ClientPlayerEntity player, Hand hand, BlockHitResult hit,
+			CallbackInfoReturnable<ActionResult> cir) {
+		// Vanilla doItemUse refuses block use while a previous mining action is active.
+		// Check before slot synchronization or predicted world changes.
+		if (((ClientPlayerInteractionManager) (Object) this).isBreakingBlock()) {
+			cir.setReturnValue(ActionResult.FAIL);
+			return;
+		}
+		if (!AntibanbyDaduncs.canInteractBlockNow(hand, hit)) cir.setReturnValue(ActionResult.FAIL);
+	}
+
+	@Inject(method = "interactEntity", at = @At("HEAD"), cancellable = true)
+	private void beforeEntityInteraction(PlayerEntity player, Entity target, Hand hand,
+			CallbackInfoReturnable<ActionResult> cir) {
+		if (!AntibanbyDaduncs.canInteractEntityNow(hand)) cir.setReturnValue(ActionResult.FAIL);
+	}
+
+	@Inject(method = "interactEntityAtLocation", at = @At("HEAD"), cancellable = true)
+	private void beforeEntityInteractionAt(PlayerEntity player, Entity target, EntityHitResult hit, Hand hand,
+			CallbackInfoReturnable<ActionResult> cir) {
+		if (!AntibanbyDaduncs.canInteractEntityNow(hand)) cir.setReturnValue(ActionResult.FAIL);
+	}
+
+	@Inject(method = "interactBlock", at = @At("RETURN"))
+	private void afterBlockInteraction(ClientPlayerEntity player, Hand hand, BlockHitResult hit, CallbackInfoReturnable<ActionResult> cir) {
+		AntibanbyDaduncs.onInteractionResult(hand, cir.getReturnValue(), false);
+	}
+
+	@Inject(method = "interactEntity", at = @At("RETURN"))
+	private void afterEntityInteraction(PlayerEntity player, Entity target, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
+		AntibanbyDaduncs.onInteractionResult(hand, cir.getReturnValue(), false);
+	}
+
+	@Inject(method = "interactEntityAtLocation", at = @At("RETURN"))
+	private void afterEntityInteractionAt(PlayerEntity player, Entity target, EntityHitResult hit, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
+		AntibanbyDaduncs.onInteractionResult(hand, cir.getReturnValue(), false);
+	}
+
+	@Inject(method = "interactItem", at = @At("RETURN"))
 	private void onInteractItemTail(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
+		AntibanbyDaduncs.onInteractionResult(hand, cir.getReturnValue(), true);
+		if (sr$usedItem != null) {
+			dlindustries.uk.daduncs.managers.InputContext.recordItemResult(hand, sr$usedItem.getRegistryEntry().registryKey(), cir.getReturnValue());
+			sr$usedItem = null;
+		}
 		if (!this.sr$use) {
 			return;
 		}
-		player.setYaw(this.sr$y);
-		player.setPitch(this.sr$p);
-		player.lastYaw = this.sr$ly;
-		player.lastPitch = this.sr$lp;
+		if (player != null) {
+			player.setYaw(this.sr$y);
+			player.setPitch(this.sr$p);
+			player.lastYaw = this.sr$ly;
+			player.lastPitch = this.sr$lp;
+		}
 		this.sr$use = false;
 	}
 }

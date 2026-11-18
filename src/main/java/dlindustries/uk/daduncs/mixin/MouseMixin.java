@@ -29,7 +29,6 @@ import dlindustries.uk.daduncs.managers.Recorder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.input.MouseInput;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -50,7 +49,6 @@ public abstract class MouseMixin {
 	@Unique private double system$lastMouseX;
 	@Unique private double system$lastMouseY;
 	@Unique private boolean system$initialized;
-	@Unique private final int[] system$buttonStates = new int[GLFW.GLFW_MOUSE_BUTTON_LAST + 1];
 
 	@Inject(method = "onFilesDropped", at = @At("HEAD"), cancellable = true)
 	private void onFilesDroppedHook(long window, List<Path> paths, int invalidFilesCount, CallbackInfo ci) {
@@ -61,10 +59,12 @@ public abstract class MouseMixin {
 
 	@Inject(method = "onMouseButton", at = @At("HEAD"))
 	private void onMouseButtonHook(long window, MouseInput input, int action, CallbackInfo ci) {
+		if (window != client.getWindow().getHandle()) return;
 		Recorder tm = Recorder.getInstance();
 		if (tm != null) {
 			tm.recordClick(input.button(), action, input.modifiers(), getX(), getY(), false);
 		}
+		EventManager.fire(new ButtonListener.ButtonEvent(input.button(), window, action));
 	}
 
 	@Inject(method = "onMouseScroll", at = @At("HEAD"))
@@ -87,9 +87,6 @@ public abstract class MouseMixin {
 			system$lastMouseX = x;
 			system$lastMouseY = y;
 
-			for (int button = 0; button < system$buttonStates.length; button++) {
-				system$buttonStates[button] = GLFW.glfwGetMouseButton(window, button);
-			}
 			return;
 		}
 
@@ -99,12 +96,5 @@ public abstract class MouseMixin {
 			EventManager.fire(new MouseMoveListener.MouseMoveEvent(window, x, y));
 		}
 
-		for (int button = 0; button < system$buttonStates.length; button++) {
-			int state = GLFW.glfwGetMouseButton(window, button);
-			if (state != system$buttonStates[button]) {
-				system$buttonStates[button] = state;
-				EventManager.fire(new ButtonListener.ButtonEvent(button, window, state));
-			}
-		}
 	}
 }

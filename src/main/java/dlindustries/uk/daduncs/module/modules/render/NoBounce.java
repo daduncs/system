@@ -25,6 +25,13 @@ import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 
 public final class NoBounce extends Module {
+	public static boolean active() {
+		var client = dlindustries.uk.daduncs.System.INSTANCE;
+		if (client == null || client.getModuleManager() == null) return false;
+		var module = client.getModuleManager().getModule(NoBounce.class);
+		return module != null && module.isEnabled();
+	}
+
 	public NoBounce() {
 		super(EncryptedString.of("No Bounce"),
 				EncryptedString.of("Removes the crystal bounce"),

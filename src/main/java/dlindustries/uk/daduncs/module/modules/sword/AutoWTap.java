@@ -112,7 +112,6 @@ public final class AutoWTap extends Module implements PacketSendListener, TickLi
 
 		if (tapScheduled) {
 			mc.options.forwardKey.setPressed(false);
-			mc.player.setSprinting(false);
 			isTapping = true;
 			tapScheduled = false;
 			tapTicksRemaining = humanize.getValue() ? (MathUtils.randomInt(1, 10) <= 8 ? 1 : 2) : 1;
@@ -122,7 +121,7 @@ public final class AutoWTap extends Module implements PacketSendListener, TickLi
 
 		if (isTapping) {
 			tapTicksRemaining--;
-			if (tapTicksRemaining <= 0 || tapTimer.delay(currentDelay)) {
+			if (tapTicksRemaining <= 0 && tapTimer.delay(currentDelay)) {
 				((IKeyBinding) mc.options.forwardKey).resetPressed();
 				isTapping = false;
 			}
@@ -131,7 +130,7 @@ public final class AutoWTap extends Module implements PacketSendListener, TickLi
 
 	@Override
 	public void onPacketSend(PacketSendEvent event) {
-		if (mc.player == null) return;
+		if (mc.player == null || mc.currentScreen != null) return;
 		if (!(event.packet instanceof PlayerInteractEntityC2SPacket packet))
 			return;
 
@@ -144,6 +143,7 @@ public final class AutoWTap extends Module implements PacketSendListener, TickLi
 
 			@Override
 			public void attack() {
+				if (mc.player.isUsingItem() || mc.player.hasVehicle() || mc.player.isClimbing()) return;
 				if (!isHoldingForward()) return;
 				if (!mc.player.isSprinting()) return;
 

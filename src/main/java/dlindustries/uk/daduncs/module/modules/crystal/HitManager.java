@@ -193,6 +193,8 @@ public final class HitManager extends Module implements AttackListener, TickList
     @Override
     public void onAttack(AttackEvent event) {
         if (mc.player == null || mc.crosshairTarget == null || mc.crosshairTarget.getType() != HitResult.Type.ENTITY) return;
+        if (((dlindustries.uk.daduncs.mixin.MinecraftClientAccessor) mc).getAttackCooldown() > 0) return;
+        if (mc.player.isRiding() || mc.player.isSpectator()) return;
 
         Entity target = ((EntityHitResult) mc.crosshairTarget).getEntity();
         Recorder tm = Recorder.getInstance();
@@ -298,6 +300,14 @@ public final class HitManager extends Module implements AttackListener, TickList
         }
 
         actionSentThisTick = false;
+        // Opening a screen cancels queued combat. Do not replay an old hit or slot
+        // restore when the user closes the screen or after DHand selects a totem.
+        if (mc.currentScreen != null) {
+            queuedSlot = -1;
+            resetSlamState();
+            return;
+        }
+        if (AntibanbyDaduncs.isInventoryOpenReserved()) return;
         checkShields();
 
         ElytraSwap elytraSwap = dlindustries.uk.daduncs.System.INSTANCE.getModuleManager().getModule(ElytraSwap.class);
@@ -372,7 +382,9 @@ public final class HitManager extends Module implements AttackListener, TickList
                 boolean inSafeReach = eyeToBox <= safeReach;
                 boolean rayHits = WorldUtils.doesRaycastHitEntity(mc.player, slamTarget, safeReach);
 
-                if (inSafeReach && rayHits && AntibanbyDaduncs.canAttackNow()) {
+                if (inSafeReach && rayHits && !mc.player.isRiding() && !mc.player.isSpectator()
+                        && mc.player.getInventory().getSelectedSlot() == slamMaceSlot
+                        && !AntibanbyDaduncs.isSlotPending() && AntibanbyDaduncs.canAttackNow()) {
                     Recorder tm = Recorder.getInstance();
                     if (tm != null) {
                         tm.recordModuleEvent("HitManager", "MACE_SLAM_ATTACK", "Attacking target " + slamTarget.getName().getString() + " with mace slot " + slamMaceSlot + " (reach=" + String.format(java.util.Locale.ROOT, "%.2f", eyeToBox) + ")", null);
@@ -439,22 +451,20 @@ public final class HitManager extends Module implements AttackListener, TickList
         }
 
         Recorder tm = Recorder.getInstance();
-        if (actionSentThisTick || AntibanbyDaduncs.isActionSent() || mc.player.isUsingItem()) {
-            queuedSlot = slot;
+        if (actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending() || mc.player.isUsingItem()) {
+            if (slamStage != SlamStage.IDLE) {
+                queuedSlot = slot;
+            }
             if (tm != null) {
-                tm.recordModuleEvent("HitManager", "QUEUE_SLOT", "Queued slot " + slot + " because actionSentThisTick=" + actionSentThisTick + " or packetGuardAction=" + AntibanbyDaduncs.isActionSent(), null);
+                tm.recordModuleEvent("HitManager", "QUEUE_SLOT", "Skipped/queued slot " + slot + " because actionSentThisTick=" + actionSentThisTick + " or packetGuardAction=" + AntibanbyDaduncs.isActionSent(), null);
             }
         } else {
             if (tm != null) {
                 tm.recordModuleEvent("HitManager", "SYNC_SLOT", "Syncing selected slot to " + slot, null);
             }
-            mc.player.getInventory().setSelectedSlot(slot);
-            if (mc.interactionManager != null) {
-                ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
-            } else {
-                mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+            if (dlindustries.uk.daduncs.utils.InventoryUtils.setInvSlot(slot)) {
+                queuedSlot = -1;
             }
-            queuedSlot = -1;
         }
     }
 
@@ -541,7 +551,7 @@ public final class HitManager extends Module implements AttackListener, TickList
 
     private boolean isSpear(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        return stack.getItem().getTranslationKey().toLowerCase().contains("spear") || stack.isOf(Items.TRIDENT);
+        return stack.contains(net.minecraft.component.DataComponentTypes.PIERCING_WEAPON);
     }
 
     private int findAxeSlot() {

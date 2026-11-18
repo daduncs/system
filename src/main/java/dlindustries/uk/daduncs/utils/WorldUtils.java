@@ -153,11 +153,37 @@ public final class WorldUtils {
 	}
 
 
+	/** Run a module's use request through vanilla targeting, fallback, and swing handling. */
+	public static boolean useItem(PlayerEntity player, Hand hand) {
+		if (player == null || player != mc.player || hand != Hand.MAIN_HAND
+				|| mc.interactionManager == null || mc.world == null || mc.currentScreen != null
+				|| player.isUsingItem()
+				|| !dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canUseItemNow(hand)) return false;
+		return dlindustries.uk.daduncs.managers.InputContext.moduleItemUse(hand, player.getStackInHand(hand).getItem().getRegistryEntry().registryKey(), () -> {
+			float yaw = player.getYaw(), pitch = player.getPitch();
+			HitResult previousHit = mc.crosshairTarget;
+			Entity previousTarget = mc.targetedEntity;
+			try {
+				if (dlindustries.uk.daduncs.utils.rotation.SilentRot.on()) {
+					player.setYaw(dlindustries.uk.daduncs.utils.rotation.SilentRot.yaw());
+					player.setPitch(dlindustries.uk.daduncs.utils.rotation.SilentRot.pitch());
+				}
+				mc.gameRenderer.updateCrosshairTarget(1.0f);
+				((dlindustries.uk.daduncs.mixin.MinecraftClientAccessor) mc).invokeDoItemUse();
+			} finally {
+				player.setYaw(yaw);
+				player.setPitch(pitch);
+				mc.crosshairTarget = previousHit;
+				mc.targetedEntity = previousTarget;
+			}
+		});
+	}
+
 	public static boolean placeBlock(BlockHitResult blockHit, boolean swingHand) {
 		if (mc.player == null || mc.interactionManager == null || blockHit == null) return false;
 		if (!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canBlockActionNow()) return false;
 		ActionResult result = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, blockHit);
-		if (result.isAccepted() && swingHand) mc.player.swingHand(Hand.MAIN_HAND);
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.shouldSwing(result) && swingHand) mc.player.swingHand(Hand.MAIN_HAND);
 		return result.isAccepted();
 	}
 
@@ -234,7 +260,11 @@ public final class WorldUtils {
 		if (blockHit.getType() == HitResult.Type.BLOCK && blockHit.getPos().squaredDistanceTo(eyePos) < entityHit.get().squaredDistanceTo(eyePos)) {
 			return false;
 		}
-		return true;
+		// Vanilla selects the first hittable entity, not an arbitrary tracked target.
+		Box search = player.getBoundingBox().stretch(lookVec.multiply(maxReach)).expand(1.0);
+		EntityHitResult nearest = ProjectileUtil.raycast(player, eyePos, reachVec, search,
+				entity -> !entity.isSpectator() && entity.canHit(), maxReach * maxReach);
+		return nearest != null && nearest.getEntity() == target;
 	}
 
 	public static boolean isTool(ItemStack itemStack) {
@@ -249,6 +279,8 @@ public final class WorldUtils {
 	}
 
 	public static void hitEntity(Entity entity, boolean swingHand) {
+		if (mc.player == null || mc.interactionManager == null || mc.currentScreen != null || entity == null) return;
+		if (!dlindustries.uk.daduncs.managers.AntibanbyDaduncs.canAttackNow()) return;
 		mc.interactionManager.attackEntity(mc.player, entity);
 
 		if (swingHand)

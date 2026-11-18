@@ -22,6 +22,7 @@ package dlindustries.uk.daduncs.mixin;
 
 import dlindustries.uk.daduncs.imixin.IKeyBinding;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.option.StickyKeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
@@ -35,18 +36,38 @@ public abstract class KeyBindingMixin implements IKeyBinding {
 	@Shadow
 	private InputUtil.Key boundKey;
 
+	@Shadow
+	private boolean pressed;
+
 	@Override
 	public boolean isActuallyPressed() {
 		int code = boundKey.getCode();
+		if (code == -1 || mc == null || mc.getWindow() == null || !mc.isWindowFocused()) {
+			return false;
+		}
 		if (boundKey.getCategory() == InputUtil.Type.MOUSE) {
 			return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), code) == GLFW.GLFW_PRESS;
+		}
+		if (boundKey.getCategory() == InputUtil.Type.SCANCODE) {
+			return dlindustries.uk.daduncs.utils.KeyUtils.isScanCodePressed(code);
 		}
 		return InputUtil.isKeyPressed(mc.getWindow(), code);
 	}
 
 	@Override
 	public void resetPressed() {
+		if ((Object) this instanceof StickyKeyBinding) {
+			if (isActuallyPressed()) {
+				this.pressed = true;
+			}
+			return;
+		}
 		setPressed(isActuallyPressed());
+	}
+
+	@Override
+	public void setRawPressed(boolean pressed) {
+		this.pressed = pressed;
 	}
 
 	@Shadow

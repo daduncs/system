@@ -21,6 +21,7 @@
 package dlindustries.uk.daduncs.event;
 
 import dlindustries.uk.daduncs.System;
+import dlindustries.uk.daduncs.managers.InputContext;
 
 
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public final class EventManager {
 	}
 
 	public static <L extends Listener, E extends Event<L>> void fire(E event) {
-		EventManager eventManager = System.INSTANCE.getEventManager();
+		EventManager eventManager = System.INSTANCE == null ? null : System.INSTANCE.getEventManager();
 		if (eventManager != null) {
 			eventManager.fireImpl(event);
 		}
@@ -45,19 +46,23 @@ public final class EventManager {
 
 	private <L extends Listener, E extends Event<L>> void fireImpl(E event) {
 		Class<L> listenerType = event.getListenerType();
-		ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(listenerType);
+		ArrayList<PrioritizedListener<L>> listeners2;
+		synchronized (listenerMap) {
+			ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(listenerType);
+			if (listeners == null || listeners.isEmpty())
+				return;
+			listeners2 = new ArrayList<>(listeners);
+		}
 
-		if (listeners == null || listeners.isEmpty())
-			return;
-
-		ArrayList<PrioritizedListener<L>> listeners2 = new ArrayList<>(listeners);
 		listeners2.removeIf(Objects::isNull);
-		listeners2.sort(Comparator.comparing(listener -> Integer.MAX_VALUE - listener.getPriority()));
+		listeners2.sort(Comparator.comparingInt((PrioritizedListener<L> listener) -> listener.getPriority()).reversed());
 
-		ArrayList<L> listeners3 = new ArrayList<>();
-		listeners2.forEach(listener -> listeners3.add(listener.getListener()));
+		ArrayList<L> listeners3 = new ArrayList<>(listeners2.size());
+		for (PrioritizedListener<L> listener : listeners2) {
+			listeners3.add(listener.getListener());
+		}
 
-		event.fire(listeners3);
+		InputContext.dispatchListeners(() -> event.fire(listeners3));
 	}
 
 	public <L extends Listener> void add(Class<L> type, L listener) {
@@ -65,20 +70,24 @@ public final class EventManager {
 	}
 
 	public <L extends Listener> void add(Class<L> type, L listener, int priority) {
-		ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(type);
-		if (listeners == null) {
-			listeners = new ArrayList<>();
-			listenerMap.put(type, (ArrayList<PrioritizedListener<? extends Listener>>) (Object) listeners);
+		synchronized (listenerMap) {
+			ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(type);
+			if (listeners == null) {
+				listeners = new ArrayList<>();
+				listenerMap.put(type, (ArrayList<PrioritizedListener<? extends Listener>>) (Object) listeners);
+			}
+			if (listeners.stream().anyMatch(l -> l.getListener().equals(listener)))
+				return;
+			listeners.add(new PrioritizedListener(listener, priority));
 		}
-		if (listeners.stream().anyMatch(l -> l.getListener().equals(listener)))
-			return;
-		listeners.add(new PrioritizedListener(listener, priority));
 	}
 
 	public <L extends Listener> void remove(Class<L> type, L listener) {
-		ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(type);
-		if (listeners != null)
-			listeners.removeIf(l -> l.getListener().equals(listener));
+		synchronized (listenerMap) {
+			ArrayList<PrioritizedListener<L>> listeners = (ArrayList<PrioritizedListener<L>>) (Object) listenerMap.get(type);
+			if (listeners != null)
+				listeners.removeIf(l -> l.getListener().equals(listener));
+		}
 	}
 
 	

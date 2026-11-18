@@ -77,17 +77,18 @@ public final class SlotManager implements TickListener {
     }
 
     public static boolean swapTo(Module owner, int targetSlot, boolean inputSimulation, int restoreDelayTicks, boolean restoreOnEnd, Runnable onEnd) {
-        if (owner == null || mc.player == null) return false;
+        if (owner == null || mc.player == null || mc.currentScreen != null) return false;
         if (targetSlot < 0 || targetSlot > 8) return false;
+        if (!AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) return false;
 
         SwapState top = stack.peek();
         if (top != null && top.owner == owner) {
+            if (!setInvSlot(targetSlot, inputSimulation)) return false;
             top.targetSlot = targetSlot;
             top.inputSimulation = inputSimulation;
             top.restoreOnEnd = restoreOnEnd;
             top.restoreTick = restoreDelayTicks < 0 ? Long.MAX_VALUE : mc.player.age + restoreDelayTicks;
             top.onEnd = onEnd;
-            setInvSlot(targetSlot, inputSimulation);
             return true;
         }
 
@@ -98,6 +99,8 @@ public final class SlotManager implements TickListener {
             return true;
         }
 
+        if (!setInvSlot(targetSlot, inputSimulation)) return false;
+
         SwapState rootState = stack.peekLast();
         int rootSlot = rootState != null ? rootState.rootSlot : previousSlot;
         boolean rootInputSimulation = rootState != null ? rootState.rootInputSimulation : inputSimulation;
@@ -105,7 +108,6 @@ public final class SlotManager implements TickListener {
         long restoreTick = restoreDelayTicks < 0 ? Long.MAX_VALUE : mc.player.age + restoreDelayTicks;
 
         stack.push(new SwapState(owner, rootSlot, rootInputSimulation, targetSlot, inputSimulation, restoreOnEnd, restoreTick, onEnd));
-        setInvSlot(targetSlot, inputSimulation);
         return true;
     }
 
@@ -240,10 +242,12 @@ public final class SlotManager implements TickListener {
         }
     }
 
-    public static void setInvSlot(int slot, boolean inputSimulation) {
-        if (slot < 0 || slot > 8 || mc.player == null || mc.currentScreen != null) return;
+    public static boolean setInvSlot(int slot, boolean inputSimulation) {
+        if (slot < 0 || slot > 8 || mc.player == null || mc.currentScreen != null) return false;
 
-        if (mc.player.getInventory().getSelectedSlot() == slot) return;
+        if (mc.player.getInventory().getSelectedSlot() == slot) return true;
+
+        if (!InventoryUtils.setInvSlot(slot)) return false;
 
         releasePressedHotbarKey();
         if (inputSimulation) {
@@ -255,8 +259,7 @@ public final class SlotManager implements TickListener {
                 }
             }
         }
-
-        InventoryUtils.setInvSlot(slot);
+        return true;
     }
 
     private static final class SwapState {

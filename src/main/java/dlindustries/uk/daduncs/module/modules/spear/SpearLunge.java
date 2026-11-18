@@ -24,7 +24,7 @@ import dlindustries.uk.daduncs.event.events.AttackListener;
 import dlindustries.uk.daduncs.event.events.PacketSendListener;
 import dlindustries.uk.daduncs.event.events.TickListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
-import dlindustries.uk.daduncs.mixin.ClientPlayerInteractionManagerAccessor;
+import dlindustries.uk.daduncs.mixin.MinecraftClientAccessor;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
 import dlindustries.uk.daduncs.module.modules.crystal.HitManager;
@@ -33,6 +33,7 @@ import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
+import dlindustries.uk.daduncs.utils.InventoryUtils;
 import dlindustries.uk.daduncs.utils.KeyUtils;
 import dlindustries.uk.daduncs.utils.WorldUtils;
 
@@ -48,7 +49,6 @@ import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
-import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
@@ -162,11 +162,8 @@ public final class SpearLunge extends Module implements AttackListener, TickList
         eventManager.remove(TickListener.class, this);
         eventManager.remove(PacketSendListener.class, this);
 
-        if (originalSlot != -1 && mc.player != null && mc.currentScreen == null && AntibanbyDaduncs.canSwapSlotNow()) {
-            mc.player.getInventory().setSelectedSlot(originalSlot);
-            if (mc.interactionManager != null) {
-                ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
-            }
+        if (originalSlot != -1 && mc.player != null && mc.currentScreen == null && !mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow()) {
+            InventoryUtils.setInvSlot(originalSlot);
         }
         resetState();
         super.onDisable();
@@ -202,13 +199,14 @@ public final class SpearLunge extends Module implements AttackListener, TickList
     @Override
     public void onAttack(AttackEvent event) {
         if (!mode.isMode(LungeMode.ATTACK)) return;
-        if (mc.player == null || mc.world == null || mc.currentScreen != null) return;
-        if (mc.player.isSpectator() || mc.player.isUsingItem() || mc.player.hasVehicle()) return;
+        if (mc.player == null || mc.world == null || mc.interactionManager == null || mc.currentScreen != null) return;
+        if (((MinecraftClientAccessor) mc).getAttackCooldown() > 0 || mc.crosshairTarget == null) return;
+        if (mc.player.isSpectator() || mc.player.isUsingItem() || mc.player.isRiding() || mc.interactionManager.isFlyingLocked()) return;
         if (isHoldingSpearWithLunge()) return;
         if (!isHoldingAllowed()) return;
         if (shouldSwitchBack) return;
 
-        if (actionSentThisTick || !AntibanbyDaduncs.canAttackNow() || AntibanbyDaduncs.isSlotPending()) return;
+        if (actionSentThisTick || !AntibanbyDaduncs.canSwapSlotNow() || !AntibanbyDaduncs.canAttackNow() || AntibanbyDaduncs.isSlotPending()) return;
 
         HitManager hitManager = HitManager.getInstance();
         if (hitManager != null && hitManager.isEnabled() && hitManager.isSlamActive()) return;
@@ -220,14 +218,16 @@ public final class SpearLunge extends Module implements AttackListener, TickList
         event.cancel();
 
         originalSlot = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(spearSlot);
-        if (mc.interactionManager != null) {
-            ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
-        } else if (mc.getNetworkHandler() != null) {
-            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(spearSlot));
+        if (!InventoryUtils.setInvSlot(spearSlot)) {
+            originalSlot = -1;
+            return;
         }
 
-        sendStabPacket();
+        if (!sendStabPacket()) {
+            shouldSwitchBack = true;
+            swapTick = mc.player.age;
+            return;
+        }
 
         shouldSwitchBack = true;
         swapTick = mc.player.age;
@@ -243,15 +243,10 @@ public final class SpearLunge extends Module implements AttackListener, TickList
         actionSentThisTick = false;
 
         if (shouldSwitchBack) {
-            if (mc.player.age > swapTick && mc.currentScreen == null) {
-                if (!actionSentThisTick && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
+            if (mc.player.age > swapTick && mc.currentScreen == null && !mc.player.isUsingItem()) {
+                if (AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
                     if (switchBack.getValue() && originalSlot >= 0 && originalSlot <= 8) {
-                        mc.player.getInventory().setSelectedSlot(originalSlot);
-                        if (mc.interactionManager != null) {
-                            ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
-                        } else if (mc.getNetworkHandler() != null) {
-                            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(originalSlot));
-                        }
+                        InventoryUtils.setInvSlot(originalSlot);
                     }
                     originalSlot = -1;
                     shouldSwitchBack = false;
@@ -259,36 +254,33 @@ public final class SpearLunge extends Module implements AttackListener, TickList
             }
         }
 
-        if (mode.isMode(LungeMode.KEYPRESS) && mc.currentScreen == null
-                && !mc.player.isSpectator() && !mc.player.isUsingItem() && !mc.player.hasVehicle()) {
+        if (mode.isMode(LungeMode.KEYPRESS) && mc.currentScreen == null && mc.interactionManager != null
+                && !mc.player.isSpectator() && !mc.player.isUsingItem() && !mc.player.isRiding()
+                && !mc.interactionManager.isFlyingLocked()) {
             boolean keyDown = KeyUtils.isKeyPressed(activateKey.getKey());
             if (keyDown && !keyWasDown) {
-                if (isHoldingSpearWithLunge()) {
+                HitManager hitManager = HitManager.getInstance();
+                boolean slamActive = hitManager != null && hitManager.isEnabled() && hitManager.isSlamActive();
+                if (!slamActive && isHoldingSpearWithLunge()) {
                     int heldSlot = mc.player.getInventory().getSelectedSlot();
-                    if (!actionSentThisTick && AntibanbyDaduncs.canAttackNow() && isCooledDown(heldSlot)) {
+                    if (!actionSentThisTick && AntibanbyDaduncs.canAttackNow() && !AntibanbyDaduncs.isSlotPending() && isCooledDown(heldSlot)) {
                         sendStabPacket();
                     }
                     keyWasDown = true;
                     return;
                 }
 
-                if (!shouldSwitchBack && !actionSentThisTick && AntibanbyDaduncs.canAttackNow() && !AntibanbyDaduncs.isSlotPending()) {
+                if (!slamActive && !shouldSwitchBack && !actionSentThisTick && AntibanbyDaduncs.canSwapSlotNow()
+                        && AntibanbyDaduncs.canAttackNow() && !AntibanbyDaduncs.isSlotPending()) {
                     int spearSlot = getSpearSlotWithLunge();
                     if (spearSlot != -1 && isCooledDown(spearSlot)) {
-                        HitManager hitManager = HitManager.getInstance();
-                        if (hitManager == null || !hitManager.isEnabled() || !hitManager.isSlamActive()) {
-                            originalSlot = mc.player.getInventory().getSelectedSlot();
-                            mc.player.getInventory().setSelectedSlot(spearSlot);
-                            if (mc.interactionManager != null) {
-                                ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).syncSlot();
-                            } else if (mc.getNetworkHandler() != null) {
-                                mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(spearSlot));
-                            }
-
+                        originalSlot = mc.player.getInventory().getSelectedSlot();
+                        if (InventoryUtils.setInvSlot(spearSlot)) {
                             sendStabPacket();
-
                             shouldSwitchBack = true;
                             swapTick = mc.player.age;
+                        } else {
+                            originalSlot = -1;
                         }
                     }
                 }
@@ -297,23 +289,34 @@ public final class SpearLunge extends Module implements AttackListener, TickList
         }
     }
 
-    private void sendStabPacket() {
-        if (mc.player == null || mc.interactionManager == null || mc.getNetworkHandler() == null) return;
-        PiercingWeaponComponent piercing = mc.player.getMainHandStack().get(DataComponentTypes.PIERCING_WEAPON);
-        if (piercing == null || !AntibanbyDaduncs.canAttackNow()) return;
+    private boolean sendStabPacket() {
+        if (mc.player == null || mc.world == null || mc.interactionManager == null || mc.getNetworkHandler() == null) return false;
+        if (mc.currentScreen != null || mc.player.isRiding() || mc.interactionManager.isFlyingLocked()) return false;
+        ItemStack mainHand = mc.player.getMainHandStack();
+        if (!mainHand.isItemEnabled(mc.world.getEnabledFeatures())) return false;
+        if (mc.player.isBelowMinimumAttackCharge(mainHand, 0)) return false;
+        PiercingWeaponComponent piercing = mainHand.get(DataComponentTypes.PIERCING_WEAPON);
+        if (piercing == null || !AntibanbyDaduncs.canAttackNow() || AntibanbyDaduncs.isSlotPending()) return false;
 
         mc.interactionManager.attackWithPiercingWeapon(piercing);
         mc.player.swingHand(Hand.MAIN_HAND);
         actionSentThisTick = true;
+        return true;
     }
 
     private boolean isCooledDown(int spearSlot) {
-        if (mc.player == null) return false;
-        if (spearSlot >= 0 && spearSlot < 9) {
-            ItemStack spearStack = mc.player.getInventory().getStack(spearSlot);
-            if (mc.player.getItemCooldownManager().isCoolingDown(spearStack)) {
-                return false;
-            }
+        if (mc.player == null || mc.world == null) return false;
+        if (spearSlot < 0 || spearSlot >= 9) return false;
+        ItemStack spearStack = mc.player.getInventory().getStack(spearSlot);
+        if (!spearStack.isItemEnabled(mc.world.getEnabledFeatures())) {
+            return false;
+        }
+        if (mc.player.getItemCooldownManager().isCoolingDown(spearStack)) {
+            return false;
+        }
+        // Vanilla doAttack() refuses piercing stabs below MINIMUM_ATTACK_CHARGE (1.0 on spears).
+        if (mc.player.isBelowMinimumAttackCharge(spearStack, 0)) {
+            return false;
         }
         if (cooldown.isMode(CooldownMode.VANILLA)) {
             float required = cooldownThreshold.getValueFloat() / 100.0F;

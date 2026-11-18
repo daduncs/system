@@ -34,14 +34,37 @@ import dlindustries.uk.daduncs.utils.KeyUtils;
 import dlindustries.uk.daduncs.utils.RotationUtils;
 import dlindustries.uk.daduncs.utils.rotation.Rotation;
 import dlindustries.uk.daduncs.utils.rotation.SilentRot;
-import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.block.ShapeContext;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityDimensions;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
 import net.minecraft.item.Items;
+import net.minecraft.item.WindChargeItem;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
 
 public final class Grappler extends Module implements TickListener, HudListener {
+
+	private static final int MAX_INTERCEPT_TICKS = 100;
+	private static final double WIND_BOX_Y_OFFSET = -0.15F;
+	// Sample both single-axis and combined deviations from vanilla's launch direction.
+	private static final Vec3d[] WIND_SPREAD_SAMPLES = {
+			Vec3d.ZERO, new Vec3d(0.017, 0, 0), new Vec3d(-0.017, 0, 0),
+			new Vec3d(0, 0.017, 0), new Vec3d(0, -0.017, 0),
+			new Vec3d(0, 0, 0.017), new Vec3d(0, 0, -0.017),
+			new Vec3d(0.010, 0.010, 0.010), new Vec3d(0.010, 0.010, -0.010),
+			new Vec3d(0.010, -0.010, 0.010), new Vec3d(0.010, -0.010, -0.010),
+			new Vec3d(-0.010, 0.010, 0.010), new Vec3d(-0.010, 0.010, -0.010),
+			new Vec3d(-0.010, -0.010, 0.010), new Vec3d(-0.010, -0.010, -0.010)
+	};
+	private static final int NOMINAL_TIMING_WEIGHT = 5;
 
 	private final bind activateKey = new bind(EncryptedString.of("Activate Key"), GLFW.GLFW_MOUSE_BUTTON_MIDDLE, false)
 			.setDescription(EncryptedString.of("Key to activate pearl catching (default: Middle Mouse Button)"));
@@ -63,7 +86,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 	private int stepCounter = 0;
 	private int holdSilentTicks = -1;
 	private int lastStepTick = -1;
-	private int cachedPing = 50;
+	private int latestPearlIdBeforeThrow = -1;
 
 	private boolean wasKeyPressed = false;
 	private boolean windChargeThrown = false;
@@ -109,7 +132,14 @@ public final class Grappler extends Module implements TickListener, HudListener 
 	}
 
 	@Override
+	public void onPlayerChanged() {
+		holdSilentTicks = -1;
+		reset();
+	}
+
+	@Override
 	public void onRenderHud(HudEvent event) {
+		if (!SilentRot.isAvailableTo(this)) return;
 		if (mc.player == null || stage != 5 || silent.getValue())
 			return;
 
@@ -130,12 +160,15 @@ public final class Grappler extends Module implements TickListener, HudListener 
 	@Override
 	public void onTick() {
 		if (mc.player == null || mc.world == null) {
+			holdSilentTicks = -1;
 			SilentRot.stop(this);
 			reset();
 			return;
 		}
 
 		if (mc.currentScreen != null) {
+			holdSilentTicks = -1;
+			SilentRot.stop(this);
 			if (stage != 0) {
 				finish();
 			}
@@ -166,39 +199,41 @@ public final class Grappler extends Module implements TickListener, HudListener 
 			}
 		}
 
+		if (!SilentRot.isAvailableTo(this)) return;
 		switch (stage) {
 			case 1: {
 				if (!hasHotbarItems()) {
 					finish();
 					break;
 				}
-				if (AntibanbyDaduncs.isSlotPending()) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 					break;
 				}
-				InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL);
-				stage = 2;
+				if (InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL)) {
+					stage = 2;
+				}
 				break;
 			}
 			case 2: {
 				if (!mc.player.getMainHandStack().isOf(Items.ENDER_PEARL)) {
-					if (!AntibanbyDaduncs.isSlotPending()) {
+					if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
 						InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL);
 					}
 					return;
 				}
 
-				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)
+						|| mc.player.getItemCooldownManager().isCoolingDown(mc.player.getMainHandStack())) {
 					return;
 				}
 
-				if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-					mc.player.swingHand(Hand.MAIN_HAND);
-				}
+				if (!dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND)) return;
 
-				Vec3d playerVel = mc.player.getVelocity();
-				pearlStartPos = new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ());
+				EnderPearlEntity previousPearl = findLatestOwnedPearl();
+				latestPearlIdBeforeThrow = previousPearl == null ? -1 : previousPearl.getId();
+				pearlStartPos = mc.player.getEyePos().add(0.0, -0.1F, 0.0);
 				Vec3d look = RotationUtils.getPlayerLookVec(mc.player.getYaw(), mc.player.getPitch());
-				pearlStartVel = look.multiply(1.5).add(playerVel.x, mc.player.isOnGround() ? 0.0 : playerVel.y, playerVel.z);
+				pearlStartVel = look.multiply(1.5).add(getLaunchMovement());
 				pearlThrownAge = mc.player.age;
 				pearlThrowYaw = mc.player.getYaw();
 
@@ -206,7 +241,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 				break;
 			}
 			case 4: {
-				if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 					return;
 				}
 				if (!InventoryUtils.selectItemFromHotbar(Items.WIND_CHARGE)) {
@@ -273,7 +308,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 			return;
 		}
 		if (!mc.player.getMainHandStack().isOf(Items.WIND_CHARGE)) {
-			if (!AntibanbyDaduncs.isSlotPending()) {
+			if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
 				InventoryUtils.selectItemFromHotbar(Items.WIND_CHARGE);
 			}
 			return;
@@ -306,40 +341,22 @@ public final class Grappler extends Module implements TickListener, HudListener 
 	}
 
 	private void fireWindCharge(boolean aligned) {
-		if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)) {
+		if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND)
+				|| mc.player.getItemCooldownManager().isCoolingDown(mc.player.getMainHandStack())) {
 			return;
 		}
 
 		if (silent.getValue()) {
-			if (aligned) {
-				float realYaw = mc.player.getYaw();
-				float realPitch = mc.player.getPitch();
-
-				mc.player.setYaw(currentYaw);
-				mc.player.setPitch(currentPitch);
-				SilentRot.set(currentYaw, currentPitch, this);
-
-				if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-					mc.player.swingHand(Hand.MAIN_HAND);
-				}
-
-				mc.player.setYaw(realYaw);
-				mc.player.setPitch(realPitch);
-				holdSilentTicks = mc.player.age + 2;
-			} else {
-				if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-					mc.player.swingHand(Hand.MAIN_HAND);
-				}
-			}
+			if (aligned) SilentRot.set(currentYaw, currentPitch, this);
 		} else {
 			mc.player.setYaw(currentYaw);
 			mc.player.setPitch(currentPitch);
-
-			if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-				mc.player.swingHand(Hand.MAIN_HAND);
-			}
 		}
 
+		boolean used = dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND);
+		if (used && aligned && silent.getValue()) holdSilentTicks = mc.player.age + 2;
+
+		if (!used) return;
 		windChargeThrown = true;
 		stage = 6;
 	}
@@ -396,116 +413,129 @@ public final class Grappler extends Module implements TickListener, HudListener 
 			return false;
 		}
 
-		double pingTicks = getPingTicks();
-		Vec3d playerVel = mc.player.getVelocity();
-		double vy = playerVel.y;
-		if (!mc.player.isGliding()) {
-			int n = (int) pingTicks;
-			for (int i = 0; i < n; ++i) {
-				vy = (vy - 0.08) * 0.98;
-			}
-			double rem = pingTicks - (double) n;
-			if (rem > 0.0) {
-				vy += ((vy - 0.08) * 0.98 - vy) * rem;
-			}
-		}
-
-		Vec3d predictedPlayerVel = new Vec3d(playerVel.x, mc.player.isOnGround() ? 0.0 : vy, playerVel.z);
-		Vec3d predictedPlayerPos = new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ())
-				.add(playerVel.x * pingTicks, playerVel.y * pingTicks, playerVel.z * pingTicks);
-
-		double elapsedPearlTicks = (double) (mc.player.age - pearlThrownAge) + pingTicks;
-		if (elapsedPearlTicks < 0.0) {
-			elapsedPearlTicks = 0.0;
-		}
-
+		// Both uses follow their movement packets, so their relative launch time is the tick gap.
+		int pearlAge = Math.max(0, mc.player.age - pearlThrownAge);
+		int elapsedTicks = pearlAge;
 		Vec3d pearlPos = pearlStartPos;
 		Vec3d pearlVel = pearlStartVel;
-		int n = (int) elapsedPearlTicks;
-		for (int i = 0; i < n; ++i) {
-			pearlVel = new Vec3d(pearlVel.x, pearlVel.y - 0.03, pearlVel.z).multiply(0.99);
+		EnderPearlEntity pearl = findLatestOwnedPearl();
+		if (pearl != null && pearl.getId() > latestPearlIdBeforeThrow && pearl.age <= elapsedTicks) {
+			// Use the spawned pearl to account for the random spread applied at launch.
+			pearlPos = pearl.getEntityPos();
+			pearlVel = pearl.getVelocity();
+			elapsedTicks -= pearl.age;
+		}
+		for (int i = 0; i < elapsedTicks; i++) {
+			pearlVel = nextPearlVelocity(pearlVel);
 			pearlPos = pearlPos.add(pearlVel);
 		}
-		double rem = elapsedPearlTicks - (double) n;
-		if (rem > 0.0) {
-			Vec3d nextVel = new Vec3d(pearlVel.x, pearlVel.y - 0.03, pearlVel.z).multiply(0.99);
-			pearlPos = pearlPos.add(nextVel.multiply(rem));
-		}
 
-		double interceptTime = solveInterceptTime(predictedPlayerPos, predictedPlayerVel, pearlPos, pearlVel);
-		if (interceptTime <= 0.0) {
+		Vec3d aim = solveInterceptDirection(mc.player.getEyePos(), getLaunchMovement(), pearlPos, pearlVel,
+				pearlAge, WindChargeItem.POWER, EntityType.WIND_CHARGE.getDimensions());
+		if (aim == null) {
 			return false;
 		}
 
-		Vec3d futurePearlPos = predictPearlPos(pearlPos, pearlVel, interceptTime);
-		futurePearlPos = new Vec3d(futurePearlPos.x, futurePearlPos.y - 0.2, futurePearlPos.z);
-
-		Vec3d diff = futurePearlPos.subtract(predictedPlayerPos).subtract(predictedPlayerVel.multiply(interceptTime));
-		if (diff.lengthSquared() < 1.0E-6) {
-			return false;
-		}
-
-		double yaw = Math.toDegrees(Math.atan2(diff.z, diff.x)) - 90.0;
-		double distH = Math.sqrt(diff.x * diff.x + diff.z * diff.z);
-		double pitch = -Math.toDegrees(Math.atan2(diff.y, distH));
-
-		lastDistH = distH;
-		targetPitch = MathHelper.clamp((float) pitch, -90.0f, 90.0f);
-		if (distH < 0.08 || Math.abs(targetPitch) >= 80.0f) {
-			targetYaw = pearlThrownAge >= 0 ? pearlThrowYaw : mc.player.getYaw();
-		} else {
-			targetYaw = (float) yaw;
-		}
+		lastDistH = aim.horizontalLength();
+		targetPitch = (float) -Math.toDegrees(Math.atan2(aim.y, lastDistH));
+		targetYaw = lastDistH < 1.0E-6 ? pearlThrowYaw : (float) (Math.toDegrees(Math.atan2(aim.z, aim.x)) - 90.0);
 		return true;
 	}
 
-	private double solveInterceptTime(Vec3d playerPos, Vec3d playerVel, Vec3d pearlPos, Vec3d pearlVel) {
-		Vec3d currentPearlPos = pearlPos;
-		Vec3d currentPearlVel = pearlVel;
-		double dist = pearlPos.subtract(playerPos).length();
-
-		for (int i = 1; i <= 100; ++i) {
-			currentPearlVel = new Vec3d(currentPearlVel.x, currentPearlVel.y - 0.03, currentPearlVel.z).multiply(0.99);
-			currentPearlPos = currentPearlPos.add(currentPearlVel);
-			double windChargeDist = 1.5 * Math.max(0.0, (double) i - 1.0);
-			double currentDist = currentPearlPos.subtract(playerPos).subtract(playerVel.multiply((double) i)).length() - windChargeDist;
-			if (currentDist <= 0.0) {
-				double d4 = dist - currentDist;
-				double d5 = d4 <= 1.0E-9 ? 0.0 : dist / d4;
-				return (double) (i - 1) + d5;
+	private EnderPearlEntity findLatestOwnedPearl() {
+		EnderPearlEntity latest = null;
+		for (Entity entity : mc.world.getEntities()) {
+			if (entity instanceof EnderPearlEntity pearl && pearl.getOwner() == mc.player
+					&& (latest == null || pearl.getId() > latest.getId())) {
+				latest = pearl;
 			}
-			dist = currentDist;
 		}
-		return 0.0;
+		return latest;
 	}
 
-	private Vec3d predictPearlPos(Vec3d startPos, Vec3d startVel, double ticks) {
-		int n = (int) Math.floor(ticks);
-		Vec3d pos = startPos;
-		Vec3d vel = startVel;
-		for (int i = 0; i < n; ++i) {
-			vel = new Vec3d(vel.x, vel.y - 0.03, vel.z).multiply(0.99);
-			pos = pos.add(vel);
-		}
-		double rem = ticks - (double) n;
-		if (rem > 0.0) {
-			vel = new Vec3d(vel.x, vel.y - 0.03, vel.z).multiply(0.99);
-			pos = pos.add(vel.multiply(rem));
-		}
-		return pos;
+	private Vec3d getLaunchMovement() {
+		Vec3d movement = mc.player.getEntityPos().subtract(mc.player.getLastRenderPos());
+		return mc.player.isOnGround() ? new Vec3d(movement.x, 0.0, movement.z) : movement;
 	}
 
-	private double getPingTicks() {
-		try {
-			if (mc.getNetworkHandler() != null && mc.player != null) {
-				PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
-				if (entry != null && entry.getLatency() > 0) {
-					cachedPing = Math.min(entry.getLatency(), 400);
+	private static Vec3d nextPearlVelocity(Vec3d velocity) {
+		return velocity.add(0.0, -0.03, 0.0).multiply(0.99F);
+	}
+
+	private Vec3d solveInterceptDirection(Vec3d origin, Vec3d movement, Vec3d pearlPos, Vec3d pearlVel,
+			int pearlAge, double speed, EntityDimensions windSize) {
+		// Index 1 is the pearl at charge launch. The adjacent phases model a one-tick packet timing shift.
+		Vec3d[] path = new Vec3d[MAX_INTERCEPT_TICKS + 4];
+		path[1] = pearlPos.subtract(origin);
+		path[0] = path[1].subtract(pearlVel);
+		int lastPoint = 1;
+		for (int i = 2; i < path.length; i++) {
+			pearlVel = nextPearlVelocity(pearlVel);
+			Vec3d nextPearlPos = pearlPos.add(pearlVel);
+			BlockHitResult impact = traceBlocks(pearlPos, nextPearlPos);
+			path[i] = impact.getPos().subtract(origin);
+			lastPoint = i;
+			if (impact.getType() != HitResult.Type.MISS) break;
+			pearlPos = nextPearlPos;
+		}
+		Box windBox = windSize.getBoxAt(new Vec3d(0.0, WIND_BOX_Y_OFFSET, 0.0));
+		Box[] hitboxes = new Box[lastPoint];
+		for (int i = 0; i < hitboxes.length; i++) {
+			hitboxes[i] = windBox.expand(MathHelper.clamp((pearlAge + i - 2) / 20.0F, 0.0F, 0.3F));
+		}
+		double centerY = WIND_BOX_Y_OFFSET + windSize.height() * 0.5;
+		double maxRadiusError = windBox.getCenter().distanceTo(new Vec3d(windBox.maxX, windBox.maxY, windBox.maxZ))
+				+ Math.sqrt(3.0) * 0.3;
+		Vec3d bestAim = null;
+		int bestScore = 0;
+
+		// The pearl sweeps its segment against the wind charge's current box, before the charge moves.
+		int lastCandidateTick = Math.min(MAX_INTERCEPT_TICKS, lastPoint - 2);
+		for (int tick = 1; tick <= lastCandidateTick; tick++) {
+			Vec3d inheritedOffset = movement.multiply(tick).add(0.0, centerY, 0.0);
+			Vec3d start = path[tick + 1].subtract(inheritedOffset);
+			Vec3d end = path[tick + 2].subtract(inheritedOffset);
+			double reach = speed * tick;
+			for (int sample = 0; sample <= 8; sample++) {
+				Vec3d aim = start.lerp(end, sample / 8.0);
+				double distance = aim.length();
+				if (Math.abs(distance - reach) > maxRadiusError) continue;
+
+				Vec3d velocity = aim.multiply(speed / distance).add(movement);
+				int hitTick = findPearlHit(path, hitboxes, velocity, tick, 0);
+				if (hitTick < 0) continue;
+				int score = 0;
+				for (Vec3d spread : WIND_SPREAD_SAMPLES) {
+					Vec3d sampledVelocity = velocity.add(spread);
+					if (findPearlHit(path, hitboxes, sampledVelocity, tick, 0) >= 0) score += NOMINAL_TIMING_WEIGHT;
+					if (findPearlHit(path, hitboxes, sampledVelocity, tick, -1) >= 0) score++;
+					if (findPearlHit(path, hitboxes, sampledVelocity, tick, 1) >= 0) score++;
+				}
+				if (score > bestScore && traceBlocks(origin, origin.add(velocity.multiply(hitTick))).getType() == HitResult.Type.MISS) {
+					bestScore = score;
+					bestAim = aim;
+					if (score == WIND_SPREAD_SAMPLES.length * (NOMINAL_TIMING_WEIGHT + 2)) return bestAim;
 				}
 			}
-		} catch (Throwable ignored) {
 		}
-		return (double) cachedPing / 50.0;
+		return bestAim;
+	}
+
+	private BlockHitResult traceBlocks(Vec3d start, Vec3d end) {
+		return mc.world.getCollisionsIncludingWorldBorder(new RaycastContext(start, end,
+				RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, ShapeContext.absent()));
+	}
+
+	private static int findPearlHit(Vec3d[] path, Box[] hitboxes, Vec3d velocity, int nearTick, int phase) {
+		int lastTick = Math.min(Math.min(MAX_INTERCEPT_TICKS, nearTick + 4), hitboxes.length - 2 - phase);
+		for (int tick = Math.max(0, nearTick - 4); tick <= lastTick; tick++) {
+			int index = tick + 1 + phase;
+			Vec3d charge = velocity.multiply(tick);
+			if (hitboxes[index].raycast(path[index].subtract(charge), path[index + 1].subtract(charge)).isPresent()) {
+				return tick;
+			}
+		}
+		return -1;
 	}
 
 	private boolean hasHotbarItems() {
@@ -516,7 +546,7 @@ public final class Grappler extends Module implements TickListener, HudListener 
 
 	private void finish() {
 		if (switchBack.getValue() && prevSlot >= 0 && mc.player != null) {
-			if (!AntibanbyDaduncs.isActionSent() && !AntibanbyDaduncs.isSlotPending()) {
+			if (!mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow() && !AntibanbyDaduncs.isSlotPending()) {
 				InventoryUtils.setInvSlot(prevSlot);
 			}
 		}

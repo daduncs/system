@@ -53,12 +53,12 @@ public final class SilentAim {
 
 	public static boolean rotateTo(Object requester, LivingEntity target, float yawSpeed, float pitchSpeed, float multipoint) {
 		if (target == null || mc.player == null || mc.world == null) return false;
-		if (owner != null && owner != requester) return false;
-		owner = requester;
+		if ((owner != null && owner != requester) || !SilentRot.isAvailableTo(requester)) return false;
 
 		float partial = mc.getRenderTickCounter().getTickProgress(false);
 		Optional<Vec3d> point = possiblePoint(target, multipoint * 0.01f, partial);
 		if (point.isEmpty()) return false;
+		owner = requester;
 
 		if (currentTarget != target || !tracking) {
 			currentTarget = target;
@@ -73,7 +73,7 @@ public final class SilentAim {
 	}
 
 	public static boolean rotateBack(Object requester, float yawSpeed, float pitchSpeed) {
-		if (owner != null && owner != requester) return false;
+		if ((owner != null && owner != requester) || !SilentRot.isAvailableTo(requester)) return false;
 
 		if (mc.player == null || !tracking) {
 			stop(requester);
@@ -118,6 +118,10 @@ public final class SilentAim {
 
 	public static boolean isTracking() {
 		return tracking;
+	}
+
+	public static void onPlayerChanged() {
+		stop(owner);
 	}
 
 	public static float yaw() {

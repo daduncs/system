@@ -31,8 +31,13 @@ public final class SilentRot {
 	private SilentRot() {
 	}
 
+	/** Client-thread writers keep the direction until their action releases it. */
+	public static boolean isAvailableTo(Object requester) {
+		return !active || holder == requester;
+	}
+
 	public static void set(float yaw, float pitch, Object who) {
-		if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
+		if (!isAvailableTo(who) || !Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
 		y = yaw;
 		p = Math.max(-90.0f, Math.min(90.0f, pitch));
 		active = true;
@@ -66,6 +71,7 @@ public final class SilentRot {
 	public static void stop() {
 		active = false;
 		holder = null;
+		moving = false;
 	}
 
 	public static boolean on() {

@@ -50,7 +50,7 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 	private final number placeDelay = new number(EncryptedString.of("Place Delay"), 0, 20, 0, 1);
 	private final number placeChance = new number(EncryptedString.of("Place Chance"), 0, 100, 100, 1).setDescription(EncryptedString.of("Randomization"));
 	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), false)
-			.setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
+			.setDescription(EncryptedString.of("Records module clicks as simulated input"));
 
 	private final TimerUtils switchTimer = new TimerUtils();
 	private final TimerUtils placeTimer = new TimerUtils();
@@ -152,24 +152,27 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 
 						resetKeys();
 
-						if (!mc.player.isHolding(Items.OBSIDIAN)) {
-							if (!switchReady || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+						if (!mc.player.getMainHandStack().isOf(Items.OBSIDIAN)) {
+							if (!switchReady || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 								return;
 							}
 
 							int randomNum = MathUtils.randomInt(1, 100);
 							if (randomNum <= switchChance.getValueInt()) {
-								switchTimer.reset();
-								dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-								if (tm != null) {
-									tm.recordModuleEvent("dtapsetup", "SWITCH_OBSIDIAN", "Selecting OBSIDIAN from hotbar", null);
+								if (InventoryUtils.selectItemFromHotbar(Items.OBSIDIAN)) {
+									switchTimer.reset();
+									dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+									if (tm != null) {
+										tm.recordModuleEvent("dtapsetup", "SWITCH_OBSIDIAN", "Selecting OBSIDIAN from hotbar", null);
+									}
 								}
-								InventoryUtils.selectItemFromHotbar(Items.OBSIDIAN);
 							}
 						}
 
-						if (mc.player.isHolding(Items.OBSIDIAN)) {
-							if (!placeReady || !AntibanbyDaduncs.canBlockActionNow() || AntibanbyDaduncs.isSlotPending()) {
+						if (mc.player.getMainHandStack().isOf(Items.OBSIDIAN)) {
+							if (!placeReady || mc.interactionManager == null || mc.interactionManager.isBreakingBlock()
+									|| !AntibanbyDaduncs.canInteractBlockNow(net.minecraft.util.Hand.MAIN_HAND, hit)
+									|| AntibanbyDaduncs.isSlotPending()) {
 								return;
 							}
 
@@ -204,27 +207,28 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 			}
 
 			if (crystalling) {
-				if (!mc.player.isHolding(Items.END_CRYSTAL)) {
-					if (!switchReady || AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+				if (!mc.player.getMainHandStack().isOf(Items.END_CRYSTAL)) {
+					if (!switchReady || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 						return;
 					}
 
 					int randomNum = MathUtils.randomInt(1, 100);
 
 					if (randomNum <= switchChance.getValueInt()) {
-						dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
-						if (tm != null) {
-							tm.recordModuleEvent("dtapsetup", "SWITCH_CRYSTAL", "Selecting END_CRYSTAL from hotbar", null);
+						if (InventoryUtils.selectItemFromHotbar(Items.END_CRYSTAL)) {
+							dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
+							if (tm != null) {
+								tm.recordModuleEvent("dtapsetup", "SWITCH_CRYSTAL", "Selecting END_CRYSTAL from hotbar", null);
+							}
+							switchTimer.reset();
 						}
-						InventoryUtils.selectItemFromHotbar(Items.END_CRYSTAL);
-						switchTimer.reset();
 					}
 				}
 
-				if (mc.player.isHolding(Items.END_CRYSTAL)) {
+				if (mc.player.getMainHandStack().isOf(Items.END_CRYSTAL)) {
 					AutoCrystal autoCrystal = System.INSTANCE.getModuleManager().getModule(AutoCrystal.class);
 
-					if (autoCrystal != null) {
+					if (autoCrystal != null && !autoCrystal.isEnabled()) {
 						dlindustries.uk.daduncs.managers.Recorder tm = dlindustries.uk.daduncs.managers.Recorder.getInstance();
 						if (tm != null) {
 							tm.recordModuleEvent("dtapsetup", "DELEGATE_AUTOCRYSTAL", "Calling autoCrystal.onTick() while holding END_CRYSTAL", null);
@@ -282,6 +286,12 @@ public final class DtapSetup extends Module implements TickListener, ItemUseList
 		crystalling = false;
 		activateKeyWasPressed = false;
 		lastObsidianPos = null;
+	}
+
+	@Override
+	public void onPlayerChanged() {
+		reset();
+		lastObsidianPlaceTime = 0;
 	}
 
 	@Override

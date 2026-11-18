@@ -33,9 +33,11 @@ import dlindustries.uk.daduncs.utils.WorldUtils;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class AutoPearlPull extends Module implements TickListener {
 
@@ -48,8 +50,7 @@ public final class AutoPearlPull extends Module implements TickListener {
 	private final number port = new number(EncryptedString.of("Port"), 10000, 60000, 25599, 1);
 
 	private DatagramSocket socket;
-	private Thread listener;
-	private volatile boolean pull;
+	private AtomicBoolean pull;
 	private boolean wasDown;
 
 	public AutoPearlPull() {
@@ -60,7 +61,7 @@ public final class AutoPearlPull extends Module implements TickListener {
 	@Override
 	public void onEnable() {
 		eventManager.add(TickListener.class, this);
-		pull = false;
+		stopListening();
 		wasDown = false;
 
 		if (mode.isMode(Mode.Puller))
@@ -72,14 +73,21 @@ public final class AutoPearlPull extends Module implements TickListener {
 	@Override
 	public void onDisable() {
 		eventManager.remove(TickListener.class, this);
+		stopListening();
+		super.onDisable();
+	}
 
+	private void stopListening() {
 		if (socket != null) {
 			socket.close();
 			socket = null;
 		}
+		pull = null;
+	}
 
-		listener = null;
-		super.onDisable();
+	@Override
+	public void onPlayerChanged() {
+		if (pull != null) pull.set(false);
 	}
 
 	@Override
@@ -87,6 +95,10 @@ public final class AutoPearlPull extends Module implements TickListener {
 		if (mc.player == null || mc.world == null) return;
 
 		if (mode.isMode(Mode.Activator)) {
+			if (mc.currentScreen != null) {
+				wasDown = false;
+				return;
+			}
 			boolean down = activate.getKey() != -1 && KeyUtils.isKeyPressed(activate.getKey());
 
 			if (down && !wasDown)
@@ -95,7 +107,7 @@ public final class AutoPearlPull extends Module implements TickListener {
 			return;
 		}
 
-		if (!pull)
+		if (pull == null || !pull.get())
 			return;
 
 		if (mc.currentScreen != null || mc.player.isUsingItem() || !AntibanbyDaduncs.canBlockActionNow() || AntibanbyDaduncs.isSlotPending())
@@ -103,29 +115,34 @@ public final class AutoPearlPull extends Module implements TickListener {
 
 		if (mc.crosshairTarget instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
 			if (WorldUtils.placeBlock(hit, true)) {
-				pull = false;
+				pull.set(false);
 			}
 		} else {
-			pull = false;
+			pull.set(false);
 		}
 	}
 
 	private void listen() {
+		final DatagramSocket receiver;
 		try {
-			socket = new DatagramSocket(port.getValueInt());
-		} catch (Exception ignored) {
+			receiver = new DatagramSocket(port.getValueInt());
+		} catch (IOException ignored) {
 			return;
 		}
 
-		listener = new Thread(() -> {
-			byte[] buffer = new byte[16];
-
-			while (socket != null && !socket.isClosed()) {
+		// A retiring receiver can only change its own pending request.
+		var pending = new AtomicBoolean();
+		pull = pending;
+		socket = receiver;
+		Thread listener = new Thread(() -> {
+			// One extra byte distinguishes the command from truncated longer datagrams.
+			byte[] buffer = new byte[2];
+			while (!receiver.isClosed()) {
 				try {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					socket.receive(packet);
-					pull = true;
-				} catch (Exception ignored) {
+					receiver.receive(packet);
+					if (packet.getLength() == 1 && buffer[0] == 1) pending.set(true);
+				} catch (IOException ignored) {
 					return;
 				}
 			}

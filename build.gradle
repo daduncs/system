@@ -96,3 +96,28 @@ tasks.register('copyJar', Copy) {
 }
 
 remapJar.finalizedBy copyJar
+
+// Headless checks use a separate source set; normal JUnit test discovery is unchanged.
+sourceSets {
+    packetPolicy {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('packetPolicyTest', JavaExec) {
+    dependsOn packetPolicyClasses
+    classpath = sourceSets.packetPolicy.runtimeClasspath
+    mainClass = 'dlindustries.uk.daduncs.managers.PacketPolicyTest'
+}
+tasks.named('check') { dependsOn 'packetPolicyTest' }
+
+// The in-game checks need a graphics context. The normal build stays headless.
+if (providers.gradleProperty('clientGameTest').isPresent()) {
+    fabricApi.configureTests {
+        createSourceSet = true
+        modId = 'system_input_test'
+        enableGameTests = false
+        enableClientGameTests = true
+        clearRunDirectory = false
+    }
+}

@@ -45,6 +45,11 @@ public final class DoubleAnchor extends Module implements TickListener {
 	private BlockPos pos;
 
 	@Override
+	public void onPlayerChanged() {
+		pos = null;
+	}
+
+	@Override
 	public void onEnable() {
 		eventManager.add(TickListener.class, this);
 		pos = null;
@@ -77,9 +82,10 @@ public final class DoubleAnchor extends Module implements TickListener {
 		// double-click processed in the same tick: r1 explodes the charged anchor server-side,
 		// r2 lands on the now-air position and places the new anchor there (airplace).
 		ActionResult r1 = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.shouldSwing(r1)) mc.player.swingHand(Hand.MAIN_HAND);
 		ActionResult r2 = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+		if (dlindustries.uk.daduncs.managers.AntibanbyDaduncs.shouldSwing(r2)) mc.player.swingHand(Hand.MAIN_HAND);
 		if (r1.isAccepted() || r2.isAccepted()) {
-			mc.player.swingHand(Hand.MAIN_HAND);
 			return true;
 		}
 		return false;
@@ -124,8 +130,8 @@ public final class DoubleAnchor extends Module implements TickListener {
 					if (hitPos.equals(pos)) {
 						return;
 					}
-					pos = hitPos;
-					doAirplace(h);
+					// A rejected attempt must remain eligible while the button is held.
+					if (doAirplace(h)) pos = hitPos;
 				}
 			}
 		}

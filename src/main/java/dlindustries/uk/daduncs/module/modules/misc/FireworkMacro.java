@@ -154,10 +154,14 @@ public final class FireworkMacro extends Module implements TickListener {
                 if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
                     return;
                 }
-                if (mc.player.getMainHandStack().isOf(Items.FIREWORK_ROCKET)) {
-                    if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-                        mc.player.swingHand(Hand.MAIN_HAND);
-                    }
+                if (!mc.player.getMainHandStack().isOf(Items.FIREWORK_ROCKET)) {
+                    reset();
+                    return;
+                }
+                if (!dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND)) {
+                    currentStepDelayMs = Math.max(50L, randomDelay());
+                    delayTimer.reset();
+                    return;
                 }
                 if (switchBack.getValue()) {
                     state = SequenceState.SWITCHING_BACK;

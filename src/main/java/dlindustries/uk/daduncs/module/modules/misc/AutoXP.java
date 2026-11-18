@@ -31,7 +31,6 @@ import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.MathUtils;
 import dlindustries.uk.daduncs.utils.MouseSimulation;
 import net.minecraft.item.Items;
-import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
 
@@ -40,7 +39,7 @@ public final class AutoXP extends Module implements TickListener, ItemUseListene
 	private final number chance = new number(EncryptedString.of("Chance"), 0, 100, 100, 1)
 			.setDescription(EncryptedString.of("Randomization"));
 	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), false)
-			.setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
+			.setDescription(EncryptedString.of("Records module clicks as simulated input"));
 	int clock;
 
 	public AutoXP() {
@@ -69,7 +68,7 @@ public final class AutoXP extends Module implements TickListener, ItemUseListene
 
 	@Override
 	public void onTick() {
-		if (mc.currentScreen != null)
+		if (mc.player == null || mc.currentScreen != null)
 			return;
 
 		boolean dontThrow = clock != 0;
@@ -86,9 +85,7 @@ public final class AutoXP extends Module implements TickListener, ItemUseListene
 			clock--;
 
 		if (!dontThrow && randomInt <= chance.getValueInt() && !mc.player.isUsingItem() && AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) && !AntibanbyDaduncs.isSlotPending()) {
-			ActionResult result = mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
-			if (result.isAccepted()) {
-				mc.player.swingHand(Hand.MAIN_HAND);
+			if (dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND)) {
 				if (clickSimulation.getValue())
 					MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 			}
@@ -99,7 +96,10 @@ public final class AutoXP extends Module implements TickListener, ItemUseListene
 
 	@Override
 	public void onItemUse(ItemUseEvent event) {
-		if (mc.player.getMainHandStack().getItem() == Items.EXPERIENCE_BOTTLE) {
+		if (mc.player == null)
+			return;
+		if (!dlindustries.uk.daduncs.managers.InputContext.isModuleUse()
+				&& mc.player.getMainHandStack().getItem() == Items.EXPERIENCE_BOTTLE) {
 			event.cancel();
 		}
 	}

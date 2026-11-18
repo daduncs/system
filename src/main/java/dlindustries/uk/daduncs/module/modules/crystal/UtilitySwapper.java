@@ -21,6 +21,7 @@
 package dlindustries.uk.daduncs.module.modules.crystal;
 
 import dlindustries.uk.daduncs.event.events.TickListener;
+import dlindustries.uk.daduncs.event.events.ButtonListener;
 import dlindustries.uk.daduncs.managers.AntibanbyDaduncs;
 import dlindustries.uk.daduncs.module.Category;
 import dlindustries.uk.daduncs.module.Module;
@@ -28,21 +29,19 @@ import dlindustries.uk.daduncs.module.setting.bind;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
 import dlindustries.uk.daduncs.utils.InventoryUtils;
-import net.minecraft.client.gui.screen.ChatScreen;
-import net.minecraft.client.gui.screen.ingame.AnvilScreen;
-import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.gui.screen.ingame.SignEditScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.item.ShieldItem;
 import net.minecraft.screen.slot.SlotActionType;
+import dlindustries.uk.daduncs.utils.KeyUtils;
+import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Predicate;
 
-public final class UtilitySwapper extends Module implements TickListener {
+public final class UtilitySwapper extends Module implements TickListener, ButtonListener {
 
     public static boolean isSwapping = false;
 
@@ -56,7 +55,7 @@ public final class UtilitySwapper extends Module implements TickListener {
             .setDescription(EncryptedString.of("The hotbar slot (1-9) where items will be swapped to"));
 
     private final bind shieldActivation = new bind(EncryptedString.of("Shield Activation"), GLFW.GLFW_KEY_UNKNOWN, false)
-            .setDescription(EncryptedString.of("You can ONLY use the shield with shieldactivation bind. NOT right click hold."))
+            .setDescription(EncryptedString.of("Hold to equip a shield and hold Use. Blocks and main-hand items keep their normal priority."))
             .setTag(EncryptedString.of("READ DESC"))
             .setShowDescription(true);
 
@@ -67,6 +66,12 @@ public final class UtilitySwapper extends Module implements TickListener {
     private int switchTimer = 0;
     private int pickupTimer = 0;
     private boolean pendingClose = false;
+    private enum Utility { SHIELD, AXE }
+    private Utility requested;
+    private ClientPlayerEntity requestPlayer;
+    private InventoryScreen swapScreen;
+    private boolean screenOpened;
+    private boolean shieldEquippedThisHold;
 
     public UtilitySwapper() {
         super(EncryptedString.of("Utility Swapper"),
@@ -79,92 +84,122 @@ public final class UtilitySwapper extends Module implements TickListener {
     @Override
     public void onEnable() {
         eventManager.add(TickListener.class, this);
+        eventManager.add(ButtonListener.class, this);
         switchTimer = 0;
         pickupTimer = 0;
-        pendingClose = false;
-        isSwapping = false;
+        shieldEquippedThisHold = false;
+        resetRequest();
         super.onEnable();
     }
 
     @Override
     public void onDisable() {
         eventManager.remove(TickListener.class, this);
-        if (mc.options != null) {
-            mc.options.useKey.setPressed(false);
-        }
-        pendingClose = false;
-        isSwapping = false;
+        eventManager.remove(ButtonListener.class, this);
+        closeOwnScreen();
+        resetRequest();
         super.onDisable();
     }
 
     @Override
-    public void onTick() {
-        if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
+    public void onButtonPress(ButtonEvent event) {
+        if (event.button == shieldActivation.getKey() && event.action == GLFW.GLFW_RELEASE
+                && event.window == mc.getWindow().getHandle()) shieldEquippedThisHold = false;
+        // Axe accepts taps between ticks. Shield progression requires a physical hold.
+        if (event.action != GLFW.GLFW_PRESS || mc.currentScreen != null
+                || mc.player == null || !mc.isWindowFocused()
+                || event.window != mc.getWindow().getHandle()) return;
+        if (event.button == axeSwap.getKey() && event.button != shieldActivation.getKey()) request(Utility.AXE);
+    }
 
-        if (pendingClose) {
-            pendingClose = false;
-            if (mc.currentScreen instanceof InventoryScreen) {
-                mc.player.closeHandledScreen();
-                mc.setScreen(null);
-            }
-            isSwapping = false;
+    private void request(Utility utility) {
+        if (requested != null) return;
+        requested = utility;
+        requestPlayer = mc.player;
+    }
+
+    @Override
+    public void onTick() {
+        if (mc.player == null || mc.world == null || mc.interactionManager == null
+                || mc.player.isSpectator() || !mc.player.isAlive() || mc.getOverlay() != null || !mc.isWindowFocused()) {
+            shieldEquippedThisHold = false;
+            closeOwnScreen();
+            resetRequest();
             return;
         }
-
-        if (!isScreenSafe()) {
-            isSwapping = false;
+        if (requestPlayer != null && requestPlayer != mc.player) {
+            shieldEquippedThisHold = false;
+            resetRequest();
             return;
         }
 
         if (switchTimer > 0) switchTimer--;
-        if (pickupTimer > 0) pickupTimer--;
-
         boolean shieldPressed = isKeyPressed(shieldActivation);
         boolean axePressed = isKeyPressed(axeSwap);
+        if (!shieldPressed) {
+            shieldEquippedThisHold = false;
+            if (requested == Utility.SHIELD) {
+                closeOwnScreen();
+                resetRequest();
+            }
+        }
 
-        if (shieldPressed) {
-            handleShield();
-        } else if (axePressed) {
-            if (mc.player.isUsingItem() && mc.player.getActiveItem().getItem() instanceof ShieldItem) {
-                mc.options.useKey.setPressed(false);
-                mc.interactionManager.stopUsingItem(mc.player);
+        if (swapScreen != null) {
+            if (mc.currentScreen != swapScreen) {
+                if (!screenOpened && InventoryUtils.canOpenPlayerInventory() && !AntibanbyDaduncs.isInventoryOpenReserved()) {
+                    if (!AntibanbyDaduncs.canInventoryActionNow()) return;
+                    // Retry only while the original screen request is still valid.
+                    mc.setScreen(swapScreen);
+                    screenOpened = mc.currentScreen == swapScreen;
+                    return;
+                }
+                resetRequest();
                 return;
             }
-            handleAxe();
-        } else {
-            if (mc.player.getMainHandStack().getItem() instanceof ShieldItem || mc.player.getOffHandStack().getItem() instanceof ShieldItem) {
-                mc.options.useKey.setPressed(false);
+            screenOpened = true;
+            if (pendingClose) {
+                closeOwnScreen();
+                resetRequest();
+                return;
             }
-            isSwapping = false;
+            if (pickupTimer > 0) pickupTimer--;
+            invSwap(itemFinder());
+            return;
+        }
+
+        if (mc.currentScreen != null) {
+            resetRequest();
+            return;
+        }
+
+        if (requested == null) {
+            if (shieldPressed && !shieldEquippedThisHold) request(Utility.SHIELD);
+            else if (axePressed) request(Utility.AXE);
+        }
+
+        if (requested == Utility.SHIELD) {
+            handleShield();
+        } else if (requested == Utility.AXE) {
+            handleAxe();
         }
     }
 
     private void handleShield() {
-        if (mc.player.getOffHandStack().getItem() == Items.SHIELD) {
-            if (mc.currentScreen == null) {
-                mc.options.useKey.setPressed(true);
-            }
+        if (equippedShieldHand() != null) {
+            shieldEquippedThisHold = true;
+            resetRequest();
             return;
         }
 
         int shieldInHotbar = findSlotInHotbar(item -> item.getItem() == Items.SHIELD);
 
-        if (shieldInHotbar != -1) {
-            if (mc.player.getInventory().getSelectedSlot() != shieldInHotbar) {
-                if (mc.currentScreen == null && switchTimer <= 0
-                        && !mc.player.isUsingItem()
-                        && AntibanbyDaduncs.canSwapSlotNow()
-                        && !AntibanbyDaduncs.isSlotPending()) {
-                    InventoryUtils.setInvSlot(shieldInHotbar);
-                    switchTimer = slotSwitchDelay.getValueInt();
-                }
-            } else {
-                if (mc.currentScreen == null) {
-                    mc.options.useKey.setPressed(true);
-                }
-            }
-        } else {
+        if (shieldInHotbar == -1) {
             invSwap(item -> item.getItem() == Items.SHIELD);
+        } else if (switchTimer <= 0 && !mc.player.isUsingItem() && AntibanbyDaduncs.canSwapSlotNow()
+                && !AntibanbyDaduncs.isSlotPending() && InventoryUtils.setInvSlot(shieldInHotbar)) {
+            shieldEquippedThisHold = true;
+            switchTimer = slotSwitchDelay.getValueInt();
+            resetRequest();
         }
     }
 
@@ -172,7 +207,7 @@ public final class UtilitySwapper extends Module implements TickListener {
         int axeInHotbar = findSlotInHotbar(item -> item.getItem() instanceof AxeItem);
 
         if (axeInHotbar != -1) {
-            isSwapping = false;
+            resetRequest();
             return;
         }
 
@@ -182,24 +217,31 @@ public final class UtilitySwapper extends Module implements TickListener {
     private void invSwap(Predicate<ItemStack> itemFinder) {
         if (mc.player == null || mc.interactionManager == null) return;
 
-        if (!(mc.currentScreen instanceof InventoryScreen)) {
-            if (!isSwapping) {
-                if (mc.player.isUsingItem()) {
-                    mc.options.useKey.setPressed(false);
-                    mc.interactionManager.stopUsingItem(mc.player);
-                    return;
-                }
-                if (mc.player.isSprinting()) {
-                    mc.player.setSprinting(false);
-                    return;
-                }
-                if (mc.player.isSneaking() || AntibanbyDaduncs.isActionSent()) {
-                    return;
-                }
-                isSwapping = true;
-                mc.setScreen(new InventoryScreen(mc.player));
-                pickupTimer = Math.max(1, itemPickupDelay.getValueInt());
+        if (swapScreen == null) {
+            if (!AntibanbyDaduncs.canInventoryActionNow()) return;
+            if (!InventoryUtils.canOpenPlayerInventory() || findInventorySlot(itemFinder) == -1 || AntibanbyDaduncs.isInventoryOpenReserved()) {
+                resetRequest();
+                return;
             }
+            if (mc.player.isUsingItem()) {
+                mc.interactionManager.stopUsingItem(mc.player);
+                return;
+            }
+            isSwapping = true;
+            swapScreen = new InventoryScreen(mc.player);
+            // Vanilla opens the screen first. This releases movement keys so sprint
+            // cannot restart each tick and prevent the inventory from ever opening.
+            mc.setScreen(swapScreen);
+            screenOpened = mc.currentScreen == swapScreen;
+            pickupTimer = Math.max(1, itemPickupDelay.getValueInt());
+            return;
+        }
+
+        if (mc.currentScreen != swapScreen
+                || mc.player.currentScreenHandler != swapScreen.getScreenHandler()) return;
+
+        if (mc.player.isUsingItem()) {
+            mc.interactionManager.stopUsingItem(mc.player);
             return;
         }
 
@@ -208,23 +250,17 @@ public final class UtilitySwapper extends Module implements TickListener {
             return;
         }
 
-        if (mc.player.isSneaking() || mc.player.isUsingItem()) {
+        if (mc.player.isSneaking() || hasMovementInput()) {
             return;
         }
 
-        if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+        if (!AntibanbyDaduncs.canInventoryActionNow() || !mc.player.currentScreenHandler.getCursorStack().isEmpty()) {
             return;
         }
 
         if (pickupTimer > 0) return;
 
-        int sourceSlot = -1;
-        for (int i = 9; i < 36; i++) {
-            if (itemFinder.test(mc.player.getInventory().getStack(i))) {
-                sourceSlot = i;
-                break;
-            }
-        }
+        int sourceSlot = findInventorySlot(itemFinder);
 
         if (sourceSlot != -1) {
             int targetHotbarIndex = utilitySlot.getValueInt() - 1;
@@ -237,13 +273,66 @@ public final class UtilitySwapper extends Module implements TickListener {
                     mc.player
             );
 
-            pendingClose = true;
-            switchTimer = slotSwitchDelay.getValueInt();
+            // clickSlot can be cancelled before prediction. Do not finish a rejected swap.
+            if (itemFinder.test(mc.player.getInventory().getStack(targetHotbarIndex))) {
+                pendingClose = true;
+                switchTimer = slotSwitchDelay.getValueInt();
+            }
         } else {
-            mc.player.closeHandledScreen();
-            mc.setScreen(null);
-            isSwapping = false;
+            closeOwnScreen();
+            resetRequest();
         }
+    }
+
+    private Predicate<ItemStack> itemFinder() {
+        return requested == Utility.SHIELD ? item -> item.getItem() == Items.SHIELD
+                : item -> item.getItem() instanceof AxeItem;
+    }
+
+    private int findInventorySlot(Predicate<ItemStack> predicate) {
+        for (int i = 9; i < 36; i++) {
+            if (predicate.test(mc.player.getInventory().getStack(i))) return i;
+        }
+        return -1;
+    }
+
+    private boolean hasMovementInput() {
+        var input = mc.player.input.playerInput;
+        return input.forward() || input.backward() || input.left() || input.right()
+                || input.jump() || input.sneak() || input.sprint();
+    }
+
+    private Hand equippedShieldHand() {
+        if (mc.player.getMainHandStack().getItem() == Items.SHIELD) return Hand.MAIN_HAND;
+        if (mc.player.getOffHandStack().getItem() == Items.SHIELD) return Hand.OFF_HAND;
+        return null;
+    }
+
+    private boolean isShieldActivationHeld() {
+        return isEnabled() && mc.player != null && mc.player.isAlive() && !mc.player.isSpectator()
+                && mc.currentScreen == null && mc.getOverlay() == null && mc.isWindowFocused()
+                && isKeyPressed(shieldActivation);
+    }
+
+    public boolean holdsShieldUse() {
+        return isShieldActivationHeld() && equippedShieldHand() != null;
+    }
+
+    private void closeOwnScreen() {
+        if (swapScreen != null && mc.currentScreen == swapScreen
+                && mc.player != null && mc.player == requestPlayer) {
+            mc.player.closeHandledScreen();
+        }
+    }
+
+    private void resetRequest() {
+        requested = null;
+        requestPlayer = null;
+        swapScreen = null;
+        screenOpened = false;
+        pendingClose = false;
+        pickupTimer = 0;
+        isSwapping = false;
     }
 
     private int findSlotInHotbar(Predicate<ItemStack> predicate) {
@@ -255,24 +344,7 @@ public final class UtilitySwapper extends Module implements TickListener {
         return -1;
     }
 
-    private boolean isScreenSafe() {
-        if (mc.currentScreen == null) return true;
-        if (mc.currentScreen instanceof InventoryScreen && isSwapping) return true;
-        if (mc.currentScreen instanceof ChatScreen ||
-                mc.currentScreen instanceof AnvilScreen ||
-                mc.currentScreen instanceof SignEditScreen ||
-                mc.currentScreen instanceof CreativeInventoryScreen) {
-            return false;
-        }
-        return false;
-    }
-
     private boolean isKeyPressed(bind setting) {
-        int key = setting.getKey();
-        if (key == -1 || key == GLFW.GLFW_KEY_UNKNOWN) return false;
-        if (key < 8) {
-            return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
-        }
-        return GLFW.glfwGetKey(mc.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
+        return KeyUtils.isKeyPressed(setting.getKey());
     }
 }

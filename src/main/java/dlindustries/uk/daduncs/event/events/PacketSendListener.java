@@ -20,7 +20,7 @@
 
 package dlindustries.uk.daduncs.event.events;
 
-import dlindustries.uk.daduncs.event.CancellableEvent;
+import dlindustries.uk.daduncs.event.Event;
 import dlindustries.uk.daduncs.event.Listener;
 import net.minecraft.network.packet.Packet;
 
@@ -30,10 +30,11 @@ import java.util.ArrayList;
 public interface PacketSendListener extends Listener {
 	void onPacketSend(PacketSendEvent event);
 
-	class PacketSendEvent extends CancellableEvent<PacketSendListener> {
-		public Packet packet;
+	/** The connection has submitted or queued this packet. Cancel input at the action hook. */
+	final class PacketSendEvent extends Event<PacketSendListener> {
+		public final Packet<?> packet;
 
-		public PacketSendEvent(Packet packet) {
+		public PacketSendEvent(Packet<?> packet) {
 			this.packet = packet;
 		}
 

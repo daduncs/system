@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class AntibanbyDaduncs {
+	private static boolean gameplayInput;
 	private static final AtomicBoolean actionSentInTick = new AtomicBoolean(false);
 	private static final AtomicBoolean attackSentInTick = new AtomicBoolean(false);
 	private static final AtomicBoolean blockActionSentInTick = new AtomicBoolean(false);
@@ -48,8 +49,16 @@ public final class AntibanbyDaduncs {
 	private static final AtomicBoolean useItemMainSentInTick = new AtomicBoolean(false);
 	private static final AtomicBoolean useItemOffSentInTick = new AtomicBoolean(false);
 	private static final AtomicBoolean droppingSentInTick = new AtomicBoolean(false);
-	private static final AtomicBoolean swappingSentInTick = new AtomicBoolean(false);
+	// Offhand swaps can precede vanilla actions; do not treat them as attacks.
 	private static final AtomicBoolean pendingAttackSwing = new AtomicBoolean(false);
+	private static boolean dropInputPending;
+	private static boolean swapHandsInputPending;
+	private static boolean inventoryOpenReserved;
+
+	/** DHand reserves the rest of this tick after its priority listener runs. */
+	public static void reserveInventoryOpen() { inventoryOpenReserved = true; }
+	public static boolean isInventoryOpenReserved() { return inventoryOpenReserved; }
+	private static final AtomicBoolean pendingDropSwing = new AtomicBoolean(false);
 	private static final AtomicBoolean pendingDigSwing = new AtomicBoolean(false);
 	private static final AtomicBoolean swingSentInTick = new AtomicBoolean(false);
 	private static final AtomicBoolean suppressedActionInTick = new AtomicBoolean(false);
@@ -57,6 +66,9 @@ public final class AntibanbyDaduncs {
 	private static volatile net.minecraft.util.hit.BlockHitResult lastPlaceOffHit = null;
 	private static final AtomicInteger pendingSlot = new AtomicInteger(-1);
 	private static final AtomicInteger lastSentSlot = new AtomicInteger(-1);
+	private static boolean mainItemFallsThrough;
+	private static Hand pendingUseSwing;
+
 	private static volatile float lastSentYaw = 0.0f;
 	private static volatile float lastSentPitch = 0.0f;
 	private static volatile boolean hasSentRotation = false;
@@ -111,7 +123,7 @@ public final class AntibanbyDaduncs {
 	}
 
 	public static boolean isActionSent() {
-		return actionSentInTick.get();
+		return inventoryOpenReserved || actionSentInTick.get();
 	}
 
 	public static boolean isEntityInteractSent() {
@@ -142,54 +154,158 @@ public final class AntibanbyDaduncs {
 		return inventoryActionSentInTick.get();
 	}
 
+	public static boolean hasPendingInventoryKey() {
+		return dropInputPending || swapHandsInputPending;
+	}
+
+	public static void reserveInventoryKeys(boolean swapHands, boolean drop) {
+		swapHandsInputPending = swapHands;
+		dropInputPending = drop;
+	}
+
+	private static boolean beforeMovement() {
+		return inTick.get() && !movementSentInTick.get() && !tickEnded.get();
+	}
+
+	private static boolean canStartWorldAction() {
+		return beforeMovement() && !inventoryOpenReserved && !hasPendingInventoryKey() && !isSlotPending();
+	}
+
+	public static boolean canDropNow() {
+		if (!gameplayInput) return true;
+		return beforeMovement() && !isSlotPending() && !attackSentInTick.get() && !blockActionSentInTick.get()
+				&& !entityInteractSentInTick.get() && !inventoryActionSentInTick.get()
+				&& !releasingSentInTick.get() && !diggingSentInTick.get()
+				&& !useItemMainSentInTick.get() && !useItemOffSentInTick.get();
+	}
+
+	/** Minecraft reads swap-hands before drop. Both may run in the same tick. */
+	public static boolean canSwapHandsNow() {
+		return !gameplayInput || (canDropNow() && !droppingSentInTick.get());
+	}
+
+	public static void finishDrop(boolean droppedItem) {
+		if (!droppedItem) pendingDropSwing.set(false);
+	}
+
 	public static boolean canSwapSlotNow() {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		return inTick.get()
-				&& !actionSentInTick.get()
-				&& !movementSentInTick.get()
-				&& !tickEnded.get()
-				&& mc.currentScreen == null;
+		return canStartWorldAction() && !actionSentInTick.get() && mc.currentScreen == null;
 	}
 
 	public static boolean canAttackNow() {
-		return inTick.get()
-				&& !movementSentInTick.get()
-				&& !tickEnded.get()
-				&& !attackSentInTick.get()
+		return canAttack(false);
+	}
+
+	public static boolean canAttackPacketNow() {
+		return !gameplayInput || canAttack(InputContext.isVanillaAttack());
+	}
+
+	public static boolean canSwingAirNow() {
+		if (!gameplayInput) return true;
+		return canStartWorldAction()
+				&& (InputContext.isVanillaAttack() || !attackSentInTick.get())
+				&& !blockPlaceMainSentInTick.get()
+				&& !blockPlaceOffSentInTick.get()
+				&& !digStartStopSentInTick.get()
+				&& !entityInteractSentInTick.get()
+				&& !inventoryActionSentInTick.get()
+				&& !releasingSentInTick.get()
+				&& !diggingSentInTick.get()
+				&& !useItemMainSentInTick.get()
+				&& !useItemOffSentInTick.get()
+				&& (InputContext.isVanillaAttack() || !swingSentInTick.get());
+	}
+
+	private static boolean canAttack(boolean repeatedInput) {
+		return canStartWorldAction()
+				&& (repeatedInput || !attackSentInTick.get())
 				&& !blockActionSentInTick.get()
 				&& !entityInteractSentInTick.get()
 				&& !inventoryActionSentInTick.get()
 				&& !releasingSentInTick.get()
 				&& !diggingSentInTick.get()
 				&& !useItemMainSentInTick.get()
-				&& !useItemOffSentInTick.get()
-				&& !isSlotPending();
+				&& !useItemOffSentInTick.get();
 	}
 
 	public static boolean canBlockActionNow() {
-		return inTick.get()
-				&& !movementSentInTick.get()
-				&& !tickEnded.get()
-				&& !attackSentInTick.get()
-				&& !entityInteractSentInTick.get()
-				&& !inventoryActionSentInTick.get()
-				&& !releasingSentInTick.get()
-				&& !diggingSentInTick.get()
-				&& !useItemMainSentInTick.get()
-				&& !useItemOffSentInTick.get()
-				&& !isSlotPending();
+		return canBlockActionNow(Hand.MAIN_HAND);
+	}
+
+	private static boolean canBlockActionNow(Hand hand) {
+		return canStartWorldAction()
+				&& !entityInteractSentInTick.get() && !inventoryActionSentInTick.get()
+				&& !releasingSentInTick.get() && !diggingSentInTick.get()
+				&& canFollowItemUse(hand);
+	}
+
+	private static boolean canFollowItemUse(Hand hand) {
+		return !usedHand(Hand.OFF_HAND) && (!usedHand(Hand.MAIN_HAND)
+				|| (hand == Hand.OFF_HAND && mainItemFallsThrough));
+	}
+
+	private static boolean usedHand(Hand hand) {
+		return InputContext.usedHand(hand, hand == Hand.MAIN_HAND ? useItemMainSentInTick.get() : useItemOffSentInTick.get());
+	}
+
+	public static boolean shouldSwing(net.minecraft.util.ActionResult result) {
+		return result instanceof net.minecraft.util.ActionResult.Success success
+				&& success.swingSource() == net.minecraft.util.ActionResult.SwingSource.CLIENT;
+	}
+
+	public static void onInteractionResult(Hand hand, net.minecraft.util.ActionResult result, boolean itemUse) {
+		InputContext.recordResult(result);
+		if (itemUse && hand == Hand.MAIN_HAND) mainItemFallsThrough = !(result instanceof net.minecraft.util.ActionResult.Success);
+		if (shouldSwing(result)) pendingUseSwing = hand;
 	}
 
 	public static boolean canUseItemNow(Hand hand) {
-		if (!inTick.get() || movementSentInTick.get() || tickEnded.get()
+		if (!gameplayInput) return true;
+		if (!canStartWorldAction()
 				|| inventoryActionSentInTick.get() || releasingSentInTick.get()
-				|| diggingSentInTick.get() || isSlotPending()) {
+				|| diggingSentInTick.get()) {
 			return false;
 		}
-		if (attackSentInTick.get() && !entityInteractSentInTick.get()) {
-			return false;
-		}
-		return hand == Hand.MAIN_HAND ? !useItemMainSentInTick.get() : !useItemOffSentInTick.get();
+		return canFollowItemUse(hand);
+	}
+
+	// These checks also run before vanilla changes predicted inventory/world state.
+	public static boolean canInventoryActionNow() {
+		if (!gameplayInput) return true;
+		return !inTick.get() || (!hasPendingInventoryKey() && !movementSentInTick.get()
+				&& !attackSentInTick.get() && !blockActionSentInTick.get()
+				&& !entityInteractSentInTick.get() && !diggingSentInTick.get()
+				&& !droppingSentInTick.get());
+	}
+
+	public static boolean canStartStopDigNow() {
+		if (!gameplayInput) return true;
+		return canStartWorldAction() && !attackSentInTick.get() && !blockPlaceMainSentInTick.get()
+				&& !blockPlaceOffSentInTick.get() && !digStartStopSentInTick.get()
+				&& !entityInteractSentInTick.get() && !inventoryActionSentInTick.get()
+				&& !releasingSentInTick.get() && !useItemMainSentInTick.get() && !useItemOffSentInTick.get();
+	}
+
+	public static boolean canInteractEntityNow() {
+		return canInteractEntityNow(Hand.MAIN_HAND);
+	}
+
+	public static boolean canInteractEntityNow(Hand hand) {
+		if (!gameplayInput) return true;
+		return canStartWorldAction() && !blockActionSentInTick.get()
+				&& !inventoryActionSentInTick.get() && !releasingSentInTick.get()
+				&& !diggingSentInTick.get() && canFollowItemUse(hand);
+	}
+
+	public static boolean canInteractBlockNow(Hand hand, net.minecraft.util.hit.BlockHitResult hit) {
+		if (!gameplayInput) return true;
+		if (!canBlockActionNow(hand)) return false;
+		if (hit == null || hit.getType() != net.minecraft.util.hit.HitResult.Type.BLOCK) return false;
+		var previous = hand == Hand.MAIN_HAND ? lastPlaceMainHit : lastPlaceOffHit;
+		return previous == null || (previous.getBlockPos().equals(hit.getBlockPos())
+				&& previous.isInsideBlock() == hit.isInsideBlock() && previous.isAgainstWorldBorder() == hit.isAgainstWorldBorder()
+				&& previous.getSide() == hit.getSide() && previous.getPos().equals(hit.getPos()));
 	}
 
 	public static float getLastSentYaw() {
@@ -208,7 +324,8 @@ public final class AntibanbyDaduncs {
 		return hasSentRotation;
 	}
 
-	public static void onTickStart() {
+	public static void onTickStart(boolean gameplay) {
+		gameplayInput = gameplay;
 		inTick.set(true);
 		movementSentInTick.set(false);
 		tickEnded.set(false);
@@ -224,6 +341,11 @@ public final class AntibanbyDaduncs {
 	}
 
 	private static void resetTickActions() {
+		inventoryOpenReserved = false;
+		reserveInventoryKeys(false, false);
+		pendingDropSwing.set(false);
+		mainItemFallsThrough = false;
+		pendingUseSwing = null;
 		actionSentInTick.set(false);
 		attackSentInTick.set(false);
 		blockActionSentInTick.set(false);
@@ -239,7 +361,6 @@ public final class AntibanbyDaduncs {
 		useItemMainSentInTick.set(false);
 		useItemOffSentInTick.set(false);
 		droppingSentInTick.set(false);
-		swappingSentInTick.set(false);
 		pendingAttackSwing.set(false);
 		pendingDigSwing.set(false);
 		swingSentInTick.set(false);
@@ -247,6 +368,7 @@ public final class AntibanbyDaduncs {
 	}
 
 	public static void reset() {
+		gameplayInput = false;
 		inTick.set(false);
 		movementSentInTick.set(false);
 		tickEnded.set(false);
@@ -277,6 +399,7 @@ public final class AntibanbyDaduncs {
 			reset();
 		} else if (packet instanceof PlayerRespawnS2CPacket) {
 			pendingSlot.set(-1);
+			lastSentSlot.set(-1);
 			resetTickActions();
 			hasSentRotation = false;
 		}
@@ -305,6 +428,8 @@ public final class AntibanbyDaduncs {
 	}
 
 	public static boolean filterPacket(Packet<?> packet) {
+		// Minecraft replies to a server-requested animation even between input ticks.
+		if (packet instanceof HandSwingC2SPacket swing && InputContext.consumeServerSwing(swing.getHand())) return false;
 		if (packet instanceof ClientTickEndC2SPacket) {
 			inTick.set(false);
 			movementSentInTick.set(true);
@@ -323,6 +448,11 @@ public final class AntibanbyDaduncs {
 			return false;
 		}
 
+		if (!gameplayInput) {
+			if (packet instanceof UpdateSelectedSlotC2SPacket slot) lastSentSlot.set(slot.getSelectedSlot());
+			return false;
+		}
+
 		if (isPostMovementSuppressedPacket(packet)) {
 			if (movementSentInTick.get() || tickEnded.get() || !inTick.get()) {
 				suppressedActionInTick.set(true);
@@ -335,14 +465,22 @@ public final class AntibanbyDaduncs {
 			}
 		}
 
+		if (isSlotPending() && (packet instanceof PlayerInteractEntityC2SPacket
+				|| packet instanceof PlayerInteractBlockC2SPacket
+				|| packet instanceof PlayerInteractItemC2SPacket)) {
+			suppressedActionInTick.set(true);
+			return true;
+		}
+
 		if (packet instanceof PlayerInteractEntityC2SPacket entityPacket) {
 			final boolean[] isAttack = {false};
+			final Hand[] interactionHand = {Hand.MAIN_HAND};
 			entityPacket.handle(new PlayerInteractEntityC2SPacket.Handler() {
 				@Override
-				public void interact(Hand hand) {}
+				public void interact(Hand hand) { interactionHand[0] = hand; }
 
 				@Override
-				public void interactAt(Hand hand, net.minecraft.util.math.Vec3d pos) {}
+				public void interactAt(Hand hand, net.minecraft.util.math.Vec3d pos) { interactionHand[0] = hand; }
 
 				@Override
 				public void attack() {
@@ -351,14 +489,7 @@ public final class AntibanbyDaduncs {
 			});
 
 			if (isAttack[0]) {
-				if (attackSentInTick.get()
-						|| blockActionSentInTick.get()
-						|| entityInteractSentInTick.get()
-						|| inventoryActionSentInTick.get()
-						|| releasingSentInTick.get()
-						|| diggingSentInTick.get()
-						|| useItemMainSentInTick.get()
-						|| useItemOffSentInTick.get()) {
+				if (!canAttackPacketNow()) {
 					suppressedActionInTick.set(true);
 					Recorder tm = Recorder.getInstance();
 					if (tm != null) {
@@ -372,12 +503,7 @@ public final class AntibanbyDaduncs {
 				attackSentInTick.set(true);
 				pendingAttackSwing.set(true);
 			} else {
-				if (blockActionSentInTick.get()
-						|| inventoryActionSentInTick.get()
-						|| releasingSentInTick.get()
-						|| diggingSentInTick.get()
-						|| useItemMainSentInTick.get()
-						|| useItemOffSentInTick.get()) {
+				if (!canInteractEntityNow(interactionHand[0])) {
 					suppressedActionInTick.set(true);
 					Recorder tm = Recorder.getInstance();
 					if (tm != null) {
@@ -394,13 +520,7 @@ public final class AntibanbyDaduncs {
 		}
 
 		if (packet instanceof PlayerInteractBlockC2SPacket blockPacket) {
-			if (attackSentInTick.get()
-					|| entityInteractSentInTick.get()
-					|| inventoryActionSentInTick.get()
-					|| releasingSentInTick.get()
-					|| diggingSentInTick.get()
-					|| useItemMainSentInTick.get()
-					|| useItemOffSentInTick.get()) {
+			if (!canInteractBlockNow(blockPacket.getHand(), blockPacket.getBlockHitResult())) {
 				suppressedActionInTick.set(true);
 				Recorder tm = Recorder.getInstance();
 				if (tm != null) {
@@ -412,22 +532,6 @@ public final class AntibanbyDaduncs {
 
 			boolean isMain = blockPacket.getHand() == Hand.MAIN_HAND;
 			net.minecraft.util.hit.BlockHitResult hitNow = blockPacket.getBlockHitResult();
-			net.minecraft.util.hit.BlockHitResult hitPrev = isMain ? lastPlaceMainHit : lastPlaceOffHit;
-			// Grim MultiPlace only flags a 2nd place in a tick if pos, face or cursor differ.
-			// An identical repeat (vanilla double-click in one tick / airplace) is allowed.
-			boolean identicalRepeat = hitPrev != null && hitNow != null
-					&& hitPrev.getBlockPos().equals(hitNow.getBlockPos())
-					&& hitPrev.getSide() == hitNow.getSide()
-					&& hitPrev.getPos().equals(hitNow.getPos());
-			if (!identicalRepeat && ((isMain && blockPlaceMainSentInTick.get()) || (!isMain && blockPlaceOffSentInTick.get()))) {
-				suppressedActionInTick.set(true);
-				Recorder tm = Recorder.getInstance();
-				if (tm != null) {
-					tm.recordModuleEvent("Antiban", "SUPPRESSED_DUPLICATE_BLOCK_PLACE",
-							"Blocked duplicate same-hand block place in same tick", null);
-				}
-				return true;
-			}
 
 			suppressedActionInTick.set(false);
 			actionSentInTick.set(true);
@@ -444,12 +548,7 @@ public final class AntibanbyDaduncs {
 
 		if (packet instanceof PlayerInteractItemC2SPacket itemPacket) {
 			boolean isMain = itemPacket.getHand() == Hand.MAIN_HAND;
-			if ((attackSentInTick.get() && !entityInteractSentInTick.get())
-					|| inventoryActionSentInTick.get()
-					|| releasingSentInTick.get()
-					|| diggingSentInTick.get()
-					|| (isMain && useItemMainSentInTick.get())
-					|| (!isMain && useItemOffSentInTick.get())) {
+			if (!canUseItemNow(itemPacket.getHand())) {
 				suppressedActionInTick.set(true);
 				Recorder tm = Recorder.getInstance();
 				if (tm != null) {
@@ -461,7 +560,9 @@ public final class AntibanbyDaduncs {
 
 			suppressedActionInTick.set(false);
 			actionSentInTick.set(true);
+			InputContext.recordHandUse(itemPacket.getHand());
 			if (isMain) {
+				mainItemFallsThrough = false;
 				useItemMainSentInTick.set(true);
 			} else {
 				useItemOffSentInTick.set(true);
@@ -473,10 +574,7 @@ public final class AntibanbyDaduncs {
 			PlayerActionC2SPacket.Action action = actionPacket.getAction();
 			if (action == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK ||
 					action == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK) {
-				if (attackSentInTick.get() || blockPlaceMainSentInTick.get() || blockPlaceOffSentInTick.get()
-						|| digStartStopSentInTick.get() || entityInteractSentInTick.get()
-						|| inventoryActionSentInTick.get() || releasingSentInTick.get()
-						|| useItemMainSentInTick.get() || useItemOffSentInTick.get()) {
+				if (!canStartStopDigNow()) {
 					suppressedActionInTick.set(true);
 					Recorder tm = Recorder.getInstance();
 					if (tm != null) {
@@ -492,10 +590,7 @@ public final class AntibanbyDaduncs {
 				digStartStopSentInTick.set(true);
 				pendingDigSwing.set(true);
 			} else if (action == PlayerActionC2SPacket.Action.STAB) {
-				if (attackSentInTick.get() || blockActionSentInTick.get() || entityInteractSentInTick.get()
-						|| inventoryActionSentInTick.get() || releasingSentInTick.get() || diggingSentInTick.get()
-						|| useItemMainSentInTick.get() || useItemOffSentInTick.get()
-						|| isSlotPending() || !isHoldingPiercingWeapon()) {
+				if (!canAttackPacketNow() || !isHoldingPiercingWeapon()) {
 					suppressedActionInTick.set(true);
 					Recorder tm = Recorder.getInstance();
 					if (tm != null) {
@@ -519,21 +614,23 @@ public final class AntibanbyDaduncs {
 				diggingSentInTick.set(true);
 			} else if (action == PlayerActionC2SPacket.Action.DROP_ITEM
 					|| action == PlayerActionC2SPacket.Action.DROP_ALL_ITEMS) {
-				actionSentInTick.set(true);
-				droppingSentInTick.set(true);
-			} else if (action == PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND) {
-				if (droppingSentInTick.get() || inventoryActionSentInTick.get()
-						|| attackSentInTick.get() || releasingSentInTick.get()
-						|| entityInteractSentInTick.get() || blockPlaceMainSentInTick.get()
-						|| blockPlaceOffSentInTick.get() || useItemMainSentInTick.get()
-						|| useItemOffSentInTick.get() || diggingSentInTick.get()
-						|| isSlotPending()) {
+				if (!canDropNow()) {
 					suppressedActionInTick.set(true);
 					return true;
 				}
+				dropInputPending = false;
+				suppressedActionInTick.set(false);
+				pendingDropSwing.set(true);
+				actionSentInTick.set(true);
+				droppingSentInTick.set(true);
+			} else if (action == PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND) {
+				if (!canSwapHandsNow()) {
+					suppressedActionInTick.set(true);
+					return true;
+				}
+				swapHandsInputPending = false;
 				suppressedActionInTick.set(false);
 				actionSentInTick.set(true);
-				swappingSentInTick.set(true);
 			} else {
 				actionSentInTick.set(true);
 			}
@@ -550,8 +647,10 @@ public final class AntibanbyDaduncs {
 				return true;
 			}
 			boolean required = (pendingAttackSwing.get() && swingPacket.getHand() == Hand.MAIN_HAND)
-					|| pendingDigSwing.get();
-			if (!required && (suppressedActionInTick.get() || swingSentInTick.get())) {
+					|| (pendingDropSwing.get() && swingPacket.getHand() == Hand.MAIN_HAND)
+					|| (pendingDigSwing.get() && swingPacket.getHand() == Hand.MAIN_HAND)
+					|| pendingUseSwing == swingPacket.getHand();
+			if (!required && (suppressedActionInTick.get() || (swingSentInTick.get() && !InputContext.isVanillaAttack()))) {
 				Recorder tm = Recorder.getInstance();
 				if (tm != null) {
 					tm.recordModuleEvent("Antiban", "SUPPRESSED_ORPHAN_SWING",
@@ -561,30 +660,20 @@ public final class AntibanbyDaduncs {
 			}
 			if (swingPacket.getHand() == Hand.MAIN_HAND) {
 				pendingAttackSwing.set(false);
+				pendingDropSwing.set(false);
 			}
 			pendingDigSwing.set(false);
+			if (pendingUseSwing == swingPacket.getHand()) pendingUseSwing = null;
 			swingSentInTick.set(true);
 			return false;
 		}
 
-		if (packet instanceof ClickSlotC2SPacket || packet instanceof CloseHandledScreenC2SPacket) {
-			if (inTick.get() && movementSentInTick.get()) {
-				Recorder tm = Recorder.getInstance();
-				if (tm != null) {
-					tm.recordModuleEvent("Antiban", "SUPPRESSED_MIDTICK_INVENTORY_ACTION",
-							"Blocked " + packet.getClass().getSimpleName() + " between PlayerMove and ClientTickEnd (PacketOrderO)", null);
-				}
-				return true;
-			}
-			if (inTick.get() && (attackSentInTick.get() || blockActionSentInTick.get()
-					|| entityInteractSentInTick.get() || diggingSentInTick.get() || droppingSentInTick.get())) {
-				Recorder tm = Recorder.getInstance();
-				if (tm != null) {
-					tm.recordModuleEvent("Antiban", "SUPPRESSED_CONFLICTING_INVENTORY_ACTION",
-							"Blocked " + packet.getClass().getSimpleName() + " in same tick as combat/block action", null);
-				}
-				return true;
-			}
+		// Closing a screen is a lifecycle operation. Dropping it strands the server
+		// in the old handler after the client has already closed it.
+		if (packet instanceof CloseHandledScreenC2SPacket) return false;
+
+		if (packet instanceof ClickSlotC2SPacket) {
+			if (!canInventoryActionNow()) return true;
 			if (inTick.get()) {
 				actionSentInTick.set(true);
 				inventoryActionSentInTick.set(true);
@@ -623,25 +712,16 @@ public final class AntibanbyDaduncs {
 	}
 
 	public static void flushPendingSlot() {
+		if (!isSlotPending()) return;
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.currentScreen != null) {
+		if (mc.currentScreen != null || mc.player == null || mc.interactionManager == null) {
 			return;
 		}
-		int pending = pendingSlot.getAndSet(-1);
-		if (pending != -1) {
-			if (lastSentSlot.get() == pending) {
-				return;
-			}
-			if (mc.player != null && mc.getNetworkHandler() != null) {
-				mc.player.getInventory().setSelectedSlot(pending);
-				mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(pending));
-				lastSentSlot.set(pending);
-				Recorder tm = Recorder.getInstance();
-				if (tm != null) {
-					tm.recordModuleEvent("Antiban", "FLUSHED_PENDING_SLOT",
-							"Flushed deferred slot change to " + pending + " at tick start", null);
-				}
-			}
+		if (pendingSlot.getAndSet(-1) != -1) {
+			// syncSelectedSlot cached the rejected send. Retry with the player's current selection.
+			var manager = (dlindustries.uk.daduncs.mixin.ClientPlayerInteractionManagerAccessor) mc.interactionManager;
+			manager.setLastSelectedSlot(lastSentSlot.get());
+			manager.syncSlot();
 		}
 	}
 }

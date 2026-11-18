@@ -35,7 +35,6 @@ import dlindustries.uk.daduncs.module.modules.crystal.HitManager;
 import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.range;
 import dlindustries.uk.daduncs.module.setting.mode;
-import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.*;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
@@ -90,18 +89,15 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 	private final range axeDelay = new range(EncryptedString.of("Axe Delay"), 50, 1000, 1, 780, 800);
 	private final range maceDelay = new range(EncryptedString.of("Mace Delay"), 50, 1000, 1, 50, 50);
 
-	private final bool inScreen = new bool(EncryptedString.of("Work In Screen"), false);
 	private final bool whileUse = new bool(EncryptedString.of("While Use"), false);
 	private final bool checkShield = new bool(EncryptedString.of("Check Shield"), false);
 	private final bool onlyCritSword = new bool(EncryptedString.of("Only Crit Sword"), false);
 	private final bool onlyCritAxe = new bool(EncryptedString.of("Only Crit Axe"), false);
-	private final bool swing = new bool(EncryptedString.of("Swing Hand"), true);
 	private final bool whileAscend = new bool(EncryptedString.of("While Ascending"), false);
-	private final bool clickSimulation = new bool(EncryptedString.of("Click Simulation"), true);
 	private final bool strayBypass = new bool(EncryptedString.of("Bypass Mode"), true);
 	private final bool allEntities = new bool(EncryptedString.of("All Entities"), false);
-	private final bool useShield = new bool(EncryptedString.of("Use Shield"), false);
-	private final number shieldTime = new number(EncryptedString.of("Shield Time"), 100, 1000, 350, 1);
+	private final bool useShield = new bool(EncryptedString.of("Use Shield"), false)
+			.setDescription(EncryptedString.of("Allows the Use key to raise your offhand shield"));
 	private final bool sticky = new bool(EncryptedString.of("Same Player"), false);
 
 	private final TimerUtils timer = new TimerUtils();
@@ -117,9 +113,9 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 		addSettings(enableSwords, enableAxes, enableMaces, enableOthers,
 				swordClick, axeClick, maceClick, otherClick,
 				swordDelay, axeDelay, maceDelay,
-				inScreen, whileUse, checkShield, whileAscend, sticky,
-				onlyCritSword, onlyCritAxe, swing, clickSimulation,
-				strayBypass, allEntities, useShield, shieldTime);
+				whileUse, checkShield, whileAscend, sticky,
+				onlyCritSword, onlyCritAxe,
+				strayBypass, allEntities, useShield);
 	}
 
 	@Override
@@ -143,7 +139,8 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 	@Override
 	public void onTick() {
 		try {
-			if (mc.currentScreen != null || mc.player.isSpectator()) return;
+			if (mc.player == null || !mc.player.isAlive() || mc.player.isSpectator()
+					|| mc.currentScreen != null || mc.getOverlay() != null || !mc.isWindowFocused()) return;
 
 			HitManager hitManager = HitManager.getInstance();
 			if (hitManager != null && hitManager.isEnabled() && hitManager.isSlamActive()) {
@@ -276,9 +273,6 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 				if (mc.interactionManager != null) {
 					mc.interactionManager.stopUsingItem(mc.player);
 				}
-				if (useShield.getValue() && mc.player.getOffHandStack().isOf(Items.SHIELD)) {
-					MouseSimulation.mouseRelease(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-				}
 				return;
 			}
 
@@ -297,11 +291,12 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 			}
 
 			boolean holdingMace = isMace || (maceSwap != null && maceSwap.isEnabled() && maceSwap.isSwapActive());
-			if (holdingMace) isMaceAttack = true;
-
-			WorldUtils.hitEntity(entity, true);
-
-			if (holdingMace) isMaceAttack = false;
+			isMaceAttack = holdingMace;
+			try {
+				WorldUtils.hitEntity(entity, true);
+			} finally {
+				isMaceAttack = false;
+			}
 
 			int baseDelay = delaySetting.getRandomValueInt();
 			if (!isMace && ClickGUI.randomisedTiming.getValue()) {
@@ -312,8 +307,6 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 			}
 			currentDelay = Math.max(50, baseDelay);
 			timer.reset();
-		} else if (useShield.getValue() && mc.player.getOffHandStack().isOf(Items.SHIELD)) {
-			MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT, shieldTime.getValueInt());
 		}
 	}
 
@@ -368,7 +361,8 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 		MaceSwap maceSwap = MaceSwap.getInstance();
 		if (maceSwap != null && maceSwap.isEnabled() && maceSwap.isSwapActive()) return;
 
-		if (AntibanbyDaduncs.isAttackSent() || !isMousePressed(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
+		if (AntibanbyDaduncs.isAttackSent() || (!dlindustries.uk.daduncs.managers.InputContext.isVanillaAttack()
+				&& !isMousePressed(GLFW.GLFW_MOUSE_BUTTON_LEFT))) {
 			event.cancel();
 		}
 	}
@@ -379,7 +373,7 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 
 	public boolean isRightClickTriggerActive() {
 		if (!isEnabled() || mc.player == null) return false;
-		if (!inScreen.getValue() && mc.currentScreen != null) return false;
+		if (mc.currentScreen != null) return false;
 
 		ItemStack mainHandStack = mc.player.getMainHandStack();
 		boolean isSword = mainHandStack.isIn(ItemTags.SWORDS);
@@ -405,6 +399,8 @@ public final class TriggerBot extends Module implements TickListener, AttackList
 	@Override
 	public void onItemUse(ItemUseEvent event) {
 		if (mc.player == null) return;
+		if (useShield.getValue() && mc.player.getOffHandStack().isOf(Items.SHIELD)
+				&& !dlindustries.uk.daduncs.managers.InputContext.isModuleUse()) return;
 
 		if (AntibanbyDaduncs.isAttackSent()) {
 			event.cancel();

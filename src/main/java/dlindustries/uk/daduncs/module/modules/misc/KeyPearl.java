@@ -68,7 +68,6 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 	private final bind aggroPearlKey = new bind(EncryptedString.of("Aggro Pearl Key"), -1, false);
 
 	private final mode<Mode> mode = new mode<>(EncryptedString.of("Mode"), Mode.Fov, Mode.class);
-
 	private final bool silent = new bool(EncryptedString.of("Silent"), true)
 			.setDescription(EncryptedString.of("Silently aim aggro pearl without flicking your screen"));
 
@@ -135,8 +134,14 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 	}
 
 	@Override
+	public void onPlayerChanged() {
+		holdSilentTicks = -1;
+		reset();
+	}
+
+	@Override
 	public void onRenderHud(HudEvent event) {
-		if (mc.player == null || stage != 2 || !isAggro || silent.getValue())
+		if (mc.player == null || stage != 2 || !isAggro || silent.getValue() || !SilentRot.isAvailableTo(this))
 			return;
 
 		long elapsed = System.currentTimeMillis() - flickStartTime;
@@ -156,12 +161,15 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 	@Override
 	public void onTick() {
 		if (mc.player == null || mc.world == null) {
+			holdSilentTicks = -1;
 			SilentRot.stop(this);
 			reset();
 			return;
 		}
 
 		if (mc.currentScreen != null) {
+			holdSilentTicks = -1;
+			SilentRot.stop(this);
 			if (stage != 0) {
 				finish();
 			}
@@ -198,6 +206,7 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 			}
 		}
 
+		if (!SilentRot.isAvailableTo(this)) return;
 		switch (stage) {
 			case 1: {
 				if (!hasPearlInHotbar()) {
@@ -207,8 +216,7 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 				if (mc.player.isUsingItem() || !AntibanbyDaduncs.canSwapSlotNow() || AntibanbyDaduncs.isSlotPending()) {
 					break;
 				}
-				InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL);
-				stage = 2;
+				if (InventoryUtils.selectItemFromHotbar(Items.ENDER_PEARL)) stage = 2;
 				break;
 			}
 			case 2: {
@@ -223,11 +231,11 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 					if (mc.player.isUsingItem() || !AntibanbyDaduncs.canUseItemNow(Hand.MAIN_HAND) || AntibanbyDaduncs.isSlotPending()) {
 						return;
 					}
-
-					if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-						mc.player.swingHand(Hand.MAIN_HAND);
+					if (mc.player.getItemCooldownManager().isCoolingDown(mc.player.getMainHandStack())) {
+						return;
 					}
-					stage = 3;
+
+					if (dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND)) stage = 3;
 					return;
 				}
 
@@ -323,36 +331,16 @@ public final class KeyPearl extends Module implements TickListener, HudListener 
 		}
 
 		if (silent.getValue()) {
-			if (aligned) {
-				float realYaw = mc.player.getYaw();
-				float realPitch = mc.player.getPitch();
-
-				mc.player.setYaw(currentYaw);
-				mc.player.setPitch(currentPitch);
-				SilentRot.set(currentYaw, currentPitch, this);
-
-				if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-					mc.player.swingHand(Hand.MAIN_HAND);
-				}
-
-				mc.player.setYaw(realYaw);
-				mc.player.setPitch(realPitch);
-				holdSilentTicks = mc.player.age + 2;
-			} else {
-				if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-					mc.player.swingHand(Hand.MAIN_HAND);
-				}
-			}
+			if (aligned) SilentRot.set(currentYaw, currentPitch, this);
 		} else {
 			mc.player.setYaw(currentYaw);
 			mc.player.setPitch(currentPitch);
-
-			if (mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND).isAccepted()) {
-				mc.player.swingHand(Hand.MAIN_HAND);
-			}
 		}
 
-		stage = 3;
+		boolean used = dlindustries.uk.daduncs.utils.WorldUtils.useItem(mc.player, Hand.MAIN_HAND);
+		if (used && aligned && silent.getValue()) holdSilentTicks = mc.player.age + 2;
+
+		if (used) stage = 3;
 	}
 
 	private void stepRotation() {

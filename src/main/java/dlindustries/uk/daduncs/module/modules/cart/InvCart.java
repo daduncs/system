@@ -30,7 +30,6 @@ import dlindustries.uk.daduncs.module.setting.bool;
 import dlindustries.uk.daduncs.module.setting.mode;
 import dlindustries.uk.daduncs.module.setting.number;
 import dlindustries.uk.daduncs.utils.EncryptedString;
-import dlindustries.uk.daduncs.utils.FakeInvScreen;
 import dlindustries.uk.daduncs.utils.InventoryUtils;
 import dlindustries.uk.daduncs.utils.TimerUtils;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
@@ -65,6 +64,7 @@ public final class InvCart extends Module implements TickListener {
     private final TimerUtils actionTimer = new TimerUtils();
     private final TimerUtils closeTimer = new TimerUtils();
     private int lastActionTick = -1;
+    private InventoryScreen openedScreen;
 
     public InvCart() {
         super(EncryptedString.of("InvCart"),
@@ -86,12 +86,14 @@ public final class InvCart extends Module implements TickListener {
     @Override
     public void onDisable() {
         eventManager.remove(TickListener.class, this);
+        openedScreen = null;
         lastActionTick = -1;
         super.onDisable();
     }
 
     @Override
     public void onTick() {
+        if (mc.currentScreen != openedScreen) openedScreen = null;
         if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
         if (UtilitySwapper.isSwapping) return;
 
@@ -109,14 +111,19 @@ public final class InvCart extends Module implements TickListener {
                     InventoryUtils.setInvSlot(targetSlot);
                 }
             }
-            mc.setScreen(new FakeInvScreen(mc.player));
+            var screen = new InventoryScreen(mc.player);
+            mc.setScreen(screen);
+            if (mc.currentScreen != screen) return;
+            openedScreen = screen;
             actionTimer.reset();
             closeTimer.reset();
             lastActionTick = mc.player.age;
             return;
         }
 
-        if (!(mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof FakeInvScreen)) {
+        if (!(mc.currentScreen instanceof InventoryScreen screen)
+                || mc.player.currentScreenHandler != screen.getScreenHandler()
+                || !screen.getScreenHandler().getCursorStack().isEmpty()) {
             return;
         }
 
@@ -141,7 +148,7 @@ public final class InvCart extends Module implements TickListener {
         }
 
         if (actionTimer.hasReached(delayMs)) {
-            if (AntibanbyDaduncs.isActionSent() || AntibanbyDaduncs.isSlotPending()) {
+            if (!AntibanbyDaduncs.canInventoryActionNow() || !mc.player.currentScreenHandler.getCursorStack().isEmpty()) {
                 return;
             }
 
@@ -176,7 +183,7 @@ public final class InvCart extends Module implements TickListener {
 
         if (autoOpen.getValue() && shouldCloseScreen() && mc.player.age > lastActionTick && closeTimer.hasReached(stayOpenMs)) {
             mc.player.closeHandledScreen();
-            mc.setScreen(null);
+            openedScreen = null;
             closeTimer.reset();
         }
     }
@@ -184,7 +191,7 @@ public final class InvCart extends Module implements TickListener {
     private boolean hasActiveMovementInput() {
         if (mc.player == null || mc.player.input == null || mc.player.input.playerInput == null) return false;
         var pi = mc.player.input.playerInput;
-        return pi.forward() || pi.backward() || pi.left() || pi.right() || pi.jump() || pi.sneak();
+        return pi.forward() || pi.backward() || pi.left() || pi.right() || pi.jump() || pi.sneak() || pi.sprint();
     }
 
     private int findCart() {
@@ -207,12 +214,14 @@ public final class InvCart extends Module implements TickListener {
     }
 
     public boolean shouldCloseScreen() {
-        return hasOffhand() && hasHotbar() && mc.currentScreen instanceof FakeInvScreen;
+        return openedScreen != null && mc.currentScreen == openedScreen && hasOffhand() && hasHotbar();
     }
 
     public boolean shouldOpenScreen() {
-        return (!hasOffhand() || !hasHotbar()) &&
-                !(mc.currentScreen instanceof FakeInvScreen) &&
+        return InventoryUtils.canOpenPlayerInventory() &&
+                !AntibanbyDaduncs.isInventoryOpenReserved() &&
+                AntibanbyDaduncs.canInventoryActionNow() &&
+                (!hasOffhand() || !hasHotbar()) &&
                 InventoryUtils.countItemExceptHotbar(item -> item == Items.TNT_MINECART) != 0;
     }
 
@@ -221,6 +230,9 @@ public final class InvCart extends Module implements TickListener {
     }
 
     private boolean hasHotbar() {
-        return !hotbar.getValue() || mc.player.getInventory().getStack(cartSlot.getValueInt() - 1).getItem() == Items.TNT_MINECART;
+        if (!hotbar.getValue()) return true;
+        ItemStack stack = mc.player.getInventory().getStack(cartSlot.getValueInt() - 1);
+        if (stack.getItem() == Items.TNT_MINECART) return true;
+        return !forceCart.getValue() && !stack.isEmpty();
     }
 }
