@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://download.daduncs.cloud/sitemap.xml
-Sitemap: https://download.daduncs.cloud/sitemap-main.xml
