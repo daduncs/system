@@ -868,12 +868,263 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const adaptiveVideos = [...document.querySelectorAll('video[data-src-high]')];
+  const qualityToggleBtn = document.getElementById('videoQualityToggle');
+  const qualityLabelEl = document.getElementById('videoQualityLabel');
+  const TIER_ORDER = ['low', 'med', 'high'];
+  const QUALITY_MODES = ['auto', 'high', 'med', 'low'];
+
+  const createAdaptiveVideoController = () => {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+    let mode = 'auto';
+    let measuredMbps = null;
+    let maxAutoTierIdx = 2; // 2=high, 1=med, 0=low
+    let ceilingExpiresAt = 0;
+
+    try {
+      const savedMode = sessionStorage.getItem('system_video_quality');
+      if (QUALITY_MODES.includes(savedMode)) mode = savedMode;
+    } catch {}
+
+    const recordTransferSample = entry => {
+      if (!entry || entry.transferSize < 100000) return;
+      const bodyMs =
+        entry.responseStart > 0 && entry.responseEnd > entry.responseStart
+          ? entry.responseEnd - entry.responseStart
+          : entry.duration;
+      if (bodyMs < 5) return;
+      const mbps = (entry.transferSize * 8) / (bodyMs * 1000);
+      if (!Number.isFinite(mbps) || mbps <= 0.05 || mbps > 2000) return;
+      measuredMbps = measuredMbps === null ? mbps : measuredMbps * 0.65 + mbps * 0.35;
+    };
+
+    try {
+      if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+        performance.getEntriesByType('resource').forEach(recordTransferSample);
+      }
+      if ('PerformanceObserver' in window) {
+        const resObs = new PerformanceObserver(list => {
+          let sawClip = false;
+          list.getEntries().forEach(entry => {
+            recordTransferSample(entry);
+            if (entry.name && entry.name.includes('/clips/')) sawClip = true;
+          });
+          if (sawClip && mode === 'auto') {
+            refreshQualityBadge();
+          }
+        });
+        resObs.observe({ type: 'resource', buffered: false });
+      }
+    } catch {}
+
+    const estimateBandwidthMbps = () => {
+      if (conn && conn.saveData) return 0.6;
+      const eff = conn && conn.effectiveType ? conn.effectiveType : '';
+      if (eff === 'slow-2g' || eff === '2g') return 0.4;
+      if (eff === '3g') return 1.4;
+
+      const connDownlink = conn && typeof conn.downlink === 'number' && conn.downlink > 0 ? conn.downlink : null;
+      if (measuredMbps !== null && connDownlink !== null) {
+        return Math.min(measuredMbps, connDownlink * 1.25);
+      }
+      if (measuredMbps !== null) return measuredMbps;
+      if (connDownlink !== null) return connDownlink;
+      return 6.5;
+    };
+
+    const getAutoTierForVideo = video => {
+      if (Date.now() > ceilingExpiresAt) maxAutoTierIdx = 2;
+
+      const bw = estimateBandwidthMbps();
+      let idx = bw >= 5.5 ? 2 : bw >= 2.0 ? 1 : 0;
+
+      // Never stream 1080p into a small viewport/element whose physical pixels are below HD
+      const rect = video ? video.getBoundingClientRect() : null;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const renderedPx = rect && rect.width > 0 ? rect.width * dpr : window.innerWidth * dpr;
+      if (renderedPx < 540) idx = Math.min(idx, 0);
+      else if (renderedPx < 960) idx = Math.min(idx, 1);
+
+      return TIER_ORDER[Math.min(idx, maxAutoTierIdx)];
+    };
+
+    const resolveTier = video => (mode === 'auto' ? getAutoTierForVideo(video) : mode);
+
+    const getTierLabel = (tier, video) => {
+      const maxRes = (video && video.dataset.maxRes) || '1080p';
+      if (tier === 'high') return maxRes;
+      if (tier === 'med') return maxRes === '720p' ? '540p' : '720p';
+      return '480p';
+    };
+
+    const getSrcForTier = (video, tier) => {
+      if (!video) return '';
+      if (tier === 'high') return video.dataset.srcHigh || '';
+      if (tier === 'med') return video.dataset.srcMed || video.dataset.srcHigh || '';
+      return video.dataset.srcLow || video.dataset.srcMed || video.dataset.srcHigh || '';
+    };
+
+    const refreshQualityBadge = activeVideo => {
+      if (!qualityLabelEl) return;
+      const refVideo =
+        activeVideo ||
+        document.querySelector('.carousel-slide.active video') ||
+        adaptiveVideos[0] ||
+        null;
+      const activeTier = (refVideo && refVideo.dataset.activeTier) || resolveTier(refVideo);
+      const resText = getTierLabel(activeTier, refVideo);
+      qualityLabelEl.textContent = mode === 'auto' ? `Auto · ${resText}` : resText;
+      if (qualityToggleBtn) {
+        qualityToggleBtn.setAttribute(
+          'aria-label',
+          `Video quality: ${qualityLabelEl.textContent}. Click to switch.`
+        );
+      }
+    };
+
+    const applyTier = (video, tier, opts = {}) => {
+      if (!video) return;
+      const nextSrc = getSrcForTier(video, tier);
+      if (!nextSrc) return;
+      if (video.dataset.activeTier === tier && video.getAttribute('src') === nextSrc) return;
+
+      const wasPlaying = !video.paused && !video.ended;
+      const resumeAt = opts.preserveTime && Number.isFinite(video.currentTime) ? video.currentTime : 0;
+
+      video.dataset.activeTier = tier;
+      video.preload = 'metadata';
+      video.setAttribute('src', nextSrc);
+      video.load();
+
+      if (resumeAt > 0.15) {
+        const restoreTime = () => {
+          try {
+            if (Number.isFinite(video.duration) && resumeAt < video.duration - 0.1) {
+              video.currentTime = resumeAt;
+            }
+          } catch {}
+        };
+        video.addEventListener('loadedmetadata', restoreTime, { once: true });
+      }
+
+      if (wasPlaying || opts.autoplay) {
+        video.play().catch(() => {});
+      }
+
+      refreshQualityBadge();
+    };
+
+    const ensureLoaded = (video, opts = {}) => {
+      if (!video) return;
+      if (!video.getAttribute('src')) {
+        applyTier(video, resolveTier(video), opts);
+      } else if (opts.autoplay && video.paused && !video.dataset.manualPause) {
+        video.play().catch(() => {});
+      }
+    };
+
+    const stepDownVideo = video => {
+      const curIdx = TIER_ORDER.indexOf(video.dataset.activeTier || 'high');
+      if (curIdx <= 0) return;
+      const nextIdx = curIdx - 1;
+      maxAutoTierIdx = Math.min(maxAutoTierIdx, nextIdx);
+      ceilingExpiresAt = Date.now() + 60000;
+      applyTier(video, TIER_ORDER[nextIdx], { preserveTime: true, autoplay: !video.paused });
+    };
+
+    const bindStallMonitor = video => {
+      let stallTimer = null;
+      let recentStalls = [];
+
+      const clearStall = () => {
+        if (stallTimer) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+      };
+
+      const onPotentialStall = () => {
+        if (mode !== 'auto' || video.paused || video.readyState >= 3) return;
+        clearStall();
+        const now = Date.now();
+        recentStalls = recentStalls.filter(ts => now - ts < 10000);
+        recentStalls.push(now);
+
+        const delay = recentStalls.length >= 2 ? 450 : 1200;
+        stallTimer = setTimeout(() => {
+          if (mode === 'auto' && !video.paused && video.readyState < 3) {
+            stepDownVideo(video);
+          }
+        }, delay);
+      };
+
+      video.addEventListener('waiting', onPotentialStall);
+      video.addEventListener('stalled', onPotentialStall);
+      video.addEventListener('playing', clearStall);
+      video.addEventListener('canplay', clearStall);
+      video.addEventListener('pause', clearStall);
+      video.addEventListener('error', () => {
+        if (video.dataset.activeTier && video.dataset.activeTier !== 'low') {
+          stepDownVideo(video);
+        }
+      });
+    };
+
+    adaptiveVideos.forEach(bindStallMonitor);
+
+    const applyModeToLoadedVideos = () => {
+      adaptiveVideos.forEach(video => {
+        if (!video.getAttribute('src')) return;
+        const targetTier = resolveTier(video);
+        if (video.dataset.activeTier !== targetTier) {
+          applyTier(video, targetTier, { preserveTime: true });
+        }
+      });
+      refreshQualityBadge();
+    };
+
+    if (conn && typeof conn.addEventListener === 'function') {
+      conn.addEventListener('change', () => {
+        if (mode === 'auto') {
+          maxAutoTierIdx = 2;
+          ceilingExpiresAt = 0;
+          applyModeToLoadedVideos();
+        }
+      });
+    }
+
+    if (qualityToggleBtn) {
+      qualityToggleBtn.addEventListener('click', () => {
+        const nextIdx = (QUALITY_MODES.indexOf(mode) + 1) % QUALITY_MODES.length;
+        mode = QUALITY_MODES[nextIdx];
+        if (mode === 'auto') {
+          maxAutoTierIdx = 2;
+          ceilingExpiresAt = 0;
+        }
+        try {
+          sessionStorage.setItem('system_video_quality', mode);
+        } catch {}
+        applyModeToLoadedVideos();
+      });
+    }
+
+    refreshQualityBadge();
+
+    return {
+      ensureLoaded,
+      refreshQualityBadge
+    };
+  };
+
+  const adaptiveMedia = createAdaptiveVideoController();
+
   const featureVideos = [...document.querySelectorAll('.feature-video')];
   if (featureVideos.length) {
     featureVideos.forEach(video => {
       const shell = video.closest('.feature-media');
       if (shell) {
         shell.addEventListener('click', () => {
+          adaptiveMedia.ensureLoaded(video);
           if (video.paused) {
             delete video.dataset.manualPause;
             video.play().catch(() => {});
@@ -886,11 +1137,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if ('IntersectionObserver' in window) {
+      const fvPreloadObs = new IntersectionObserver(
+        (entries, self) => {
+          entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            adaptiveMedia.ensureLoaded(entry.target);
+            self.unobserve(entry.target);
+          });
+        },
+        { rootMargin: '500px 0px', threshold: 0.01 }
+      );
+      featureVideos.forEach(v => fvPreloadObs.observe(v));
+
       const fvObs = new IntersectionObserver(
         entries => {
           entries.forEach(entry => {
             const v = entry.target;
             if (entry.isIntersecting) {
+              adaptiveMedia.ensureLoaded(v);
               if (!v.dataset.manualPause) v.play().catch(() => {});
             } else {
               v.pause();
@@ -900,6 +1164,8 @@ document.addEventListener('DOMContentLoaded', () => {
         { threshold: 0.25 }
       );
       featureVideos.forEach(v => fvObs.observe(v));
+    } else {
+      featureVideos.forEach(v => adaptiveMedia.ensureLoaded(v));
     }
   }
 
@@ -918,6 +1184,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let carouselInView = false;
     let cancelTitleType = null;
 
+    const preloadAdjacentSlide = idx => {
+      const nextSlide = slides[(idx + 1) % slides.length];
+      const nextVideo = nextSlide && nextSlide.querySelector('video');
+      if (nextVideo) adaptiveMedia.ensureLoaded(nextVideo);
+    };
+
     if (carouselCursor && finePointer) {
       carousel.addEventListener('mousemove', e => {
         const rect = carousel.getBoundingClientRect();
@@ -935,6 +1207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleActivePlay = () => {
       const activeVideo = slides[currentIdx].querySelector('video');
       if (!activeVideo) return;
+      adaptiveMedia.ensureLoaded(activeVideo);
       if (activeVideo.paused) {
         activeVideo.play().catch(() => {});
         carousel.classList.remove('is-paused');
@@ -962,8 +1235,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const activeVideo = activeSlide.querySelector('video');
       carousel.classList.remove('is-paused');
       if (activeVideo) {
-        activeVideo.currentTime = 0;
+        adaptiveMedia.ensureLoaded(activeVideo);
+        adaptiveMedia.refreshQualityBadge(activeVideo);
+        try {
+          activeVideo.currentTime = 0;
+        } catch {}
         if (carouselInView) activeVideo.play().catch(() => {});
+        activeVideo.addEventListener('canplay', () => preloadAdjacentSlide(currentIdx), { once: true });
       }
     };
 
@@ -983,18 +1261,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(
+        (entries, self) => {
+          if (!entries[0].isIntersecting) return;
+          const activeVideo = slides[currentIdx].querySelector('video');
+          if (activeVideo) {
+            adaptiveMedia.ensureLoaded(activeVideo);
+            adaptiveMedia.refreshQualityBadge(activeVideo);
+          }
+          self.unobserve(carousel);
+        },
+        { rootMargin: '500px 0px', threshold: 0.01 }
+      ).observe(carousel);
+
+      new IntersectionObserver(
         entries => {
           carouselInView = entries[0].isIntersecting;
           const activeVideo = slides[currentIdx].querySelector('video');
           if (!activeVideo) return;
           if (carouselInView && !carousel.classList.contains('is-paused')) {
+            adaptiveMedia.ensureLoaded(activeVideo);
+            adaptiveMedia.refreshQualityBadge(activeVideo);
             activeVideo.play().catch(() => {});
+            activeVideo.addEventListener('canplay', () => preloadAdjacentSlide(currentIdx), { once: true });
           } else {
             activeVideo.pause();
           }
         },
         { threshold: 0.2 }
       ).observe(carousel);
+    } else {
+      const activeVideo = slides[currentIdx].querySelector('video');
+      if (activeVideo) adaptiveMedia.ensureLoaded(activeVideo);
     }
   }
 

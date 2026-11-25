@@ -33,7 +33,7 @@
   <link rel="preload" href="assets/fonts/ProductSans-Bold.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="assets/fonts/ProductSans-Black.woff" as="font" type="font/woff" crossorigin>
 
-  <link rel="stylesheet" href="style.css?v=b2.4">
+  <link rel="stylesheet" href="style.css?v=b2.4.1">
 
   <script type="application/ld+json">
   {
@@ -242,8 +242,11 @@
             </ul>
           </div>
           <div class="feature-media">
-            <video class="feature-video" muted loop playsinline preload="metadata" poster="assets/posters/safeanchors.jpg">
-              <source src="assets/clips/safeanchors.mp4" type="video/mp4">
+            <video class="feature-video" muted loop playsinline preload="none" poster="assets/posters/safeanchors.jpg"
+              data-src-high="assets/clips/safeanchors.mp4"
+              data-src-med="assets/clips/720p/safeanchors.mp4"
+              data-src-low="assets/clips/480p/safeanchors.mp4"
+              data-max-res="1080p">
             </video>
             <div class="feature-chip">
               <span class="chip-dot"></span>
@@ -263,8 +266,11 @@
             </ul>
           </div>
           <div class="feature-media">
-            <video class="feature-video" muted loop playsinline preload="metadata" poster="assets/posters/mace.jpg">
-              <source src="assets/clips/mace.mp4" type="video/mp4">
+            <video class="feature-video" muted loop playsinline preload="none" poster="assets/posters/mace.jpg"
+              data-src-high="assets/clips/mace.mp4"
+              data-src-med="assets/clips/720p/mace.mp4"
+              data-src-low="assets/clips/480p/mace.mp4"
+              data-max-res="720p">
             </video>
             <div class="feature-chip">
               <span class="chip-dot"></span>
@@ -287,8 +293,11 @@
             </ul>
           </div>
           <div class="feature-media">
-            <video class="feature-video" muted loop playsinline preload="metadata" poster="assets/posters/speardtap.jpg">
-              <source src="assets/clips/spear%20dtap.mp4" type="video/mp4">
+            <video class="feature-video" muted loop playsinline preload="none" poster="assets/posters/speardtap.jpg"
+              data-src-high="assets/clips/spear%20dtap.mp4"
+              data-src-med="assets/clips/720p/spear%20dtap.mp4"
+              data-src-low="assets/clips/480p/spear%20dtap.mp4"
+              data-max-res="1080p">
             </video>
             <div class="feature-chip">
               <span class="chip-dot"></span>
@@ -323,8 +332,11 @@
             </div>
           </div>
           <div class="feature-media">
-            <video class="feature-video" muted loop playsinline preload="metadata" poster="assets/posters/visuals.jpg">
-              <source src="assets/clips/lyrics2.mp4" type="video/mp4">
+            <video class="feature-video" muted loop playsinline preload="none" poster="assets/posters/visuals.jpg"
+              data-src-high="assets/clips/lyrics2.mp4"
+              data-src-med="assets/clips/720p/lyrics2.mp4"
+              data-src-low="assets/clips/480p/lyrics2.mp4"
+              data-max-res="1080p">
             </video>
             <div class="feature-chip">
               <span class="chip-dot"></span>
@@ -346,28 +358,43 @@
         <div class="carousel-stage-wrap reveal">
           <div class="carousel-stage" id="mediaCarousel">
             <div class="carousel-slide active" data-title="gameplay.">
-              <video class="carousel-video" muted loop playsinline preload="metadata" poster="assets/posters/gameplay.jpg">
-                <source src="assets/clips/gameplay.mp4" type="video/mp4">
+              <video class="carousel-video" muted loop playsinline preload="none" poster="assets/posters/gameplay.jpg"
+                data-src-high="assets/clips/gameplay.mp4"
+                data-src-med="assets/clips/720p/gameplay.mp4"
+                data-src-low="assets/clips/480p/gameplay.mp4"
+                data-max-res="1080p">
               </video>
             </div>
             <div class="carousel-slide" data-title="safe anchors.">
-              <video class="carousel-video" muted loop playsinline preload="metadata" poster="assets/posters/safeanchors.jpg">
-                <source src="assets/clips/safeanchors.mp4" type="video/mp4">
+              <video class="carousel-video" muted loop playsinline preload="none" poster="assets/posters/safeanchors.jpg"
+                data-src-high="assets/clips/safeanchors.mp4"
+                data-src-med="assets/clips/720p/safeanchors.mp4"
+                data-src-low="assets/clips/480p/safeanchors.mp4"
+                data-max-res="1080p">
               </video>
             </div>
             <div class="carousel-slide" data-title="mace.">
-              <video class="carousel-video" muted loop playsinline preload="metadata" poster="assets/posters/mace.jpg">
-                <source src="assets/clips/mace.mp4" type="video/mp4">
+              <video class="carousel-video" muted loop playsinline preload="none" poster="assets/posters/mace.jpg"
+                data-src-high="assets/clips/mace.mp4"
+                data-src-med="assets/clips/720p/mace.mp4"
+                data-src-low="assets/clips/480p/mace.mp4"
+                data-max-res="720p">
               </video>
             </div>
             <div class="carousel-slide" data-title="spear.">
-              <video class="carousel-video" muted loop playsinline preload="metadata" poster="assets/posters/speardtap.jpg">
-                <source src="assets/clips/spear%20dtap.mp4" type="video/mp4">
+              <video class="carousel-video" muted loop playsinline preload="none" poster="assets/posters/speardtap.jpg"
+                data-src-high="assets/clips/spear%20dtap.mp4"
+                data-src-med="assets/clips/720p/spear%20dtap.mp4"
+                data-src-low="assets/clips/480p/spear%20dtap.mp4"
+                data-max-res="1080p">
               </video>
             </div>
             <div class="carousel-slide" data-title="visuals.">
-              <video class="carousel-video" muted loop playsinline preload="metadata" poster="assets/posters/visuals.jpg">
-                <source src="assets/clips/lyrics2.mp4" type="video/mp4">
+              <video class="carousel-video" muted loop playsinline preload="none" poster="assets/posters/visuals.jpg"
+                data-src-high="assets/clips/lyrics2.mp4"
+                data-src-med="assets/clips/720p/lyrics2.mp4"
+                data-src-low="assets/clips/480p/lyrics2.mp4"
+                data-max-res="1080p">
               </video>
             </div>
 
@@ -395,6 +422,10 @@
             </div>
 
             <div class="carousel-controls-wrap">
+              <button class="quality-toggle" id="videoQualityToggle" type="button" aria-label="Change video streaming quality" title="Cycle video quality (Auto / 1080p / 720p / 480p)">
+                <span class="quality-dot" aria-hidden="true"></span>
+                <span id="videoQualityLabel">Auto</span>
+              </button>
               <span class="carousel-counter" id="carouselCounter">01 / 05</span>
               <div class="slider-controls">
                 <button class="slider-btn" id="carouselPrev" type="button" aria-label="Previous clip">
@@ -696,6 +727,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=b2.4"></script>
+  <script src="script.js?v=b2.4.1"></script>
 </body>
 </html>
